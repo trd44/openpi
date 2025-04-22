@@ -44,6 +44,7 @@ COPY ./packages/openpi-client/pyproject.toml /tmp/openpi-client/pyproject.toml
 RUN uv venv --python 3.8 $UV_PROJECT_ENVIRONMENT
 RUN uv pip sync /tmp/requirements.txt /tmp/requirements-libero.txt /tmp/openpi-client/pyproject.toml --extra-index-url https://download.pytorch.org/whl/cu113 --index-strategy=unsafe-best-match
 ENV PYTHONPATH=/app:/app/packages/openpi-client/src:/app/third_party/libero
+# ENV PYTHONPATH=/app:/app/third_party/libero
 
 # Create a default config file to avoid an input prompt from LIBERO's init script.
 # https://github.com/Lifelong-Robot-Learning/LIBERO/blob/master/libero/libero/__init__.py
@@ -56,4 +57,13 @@ datasets: /app/third_party/libero/libero/datasets
 assets: /app/third_party/libero/libero/libero/assets
 EOF
 
-CMD ["/bin/bash", "-c", "source /.venv/bin/activate && python examples/libero/main.py"]
+# CMD ["/bin/bash", "-c", "source /.venv/bin/activate && python examples/libero/main_rs.py"]
+CMD ["/bin/bash", "-c", \
+     "source /.venv/bin/activate && \
+      echo 'Installing custom Robosuite source from /robosuite_source...' && \
+      uv pip install --no-cache-dir -e /robosuite_source && \
+      echo 'Installing robosuite_task_zoo dependency...' && \
+      uv pip install --no-cache-dir -e /robosuite_task_zoo_source && \
+      echo 'Custom Robosuite installed.' && \
+      cd /app && \
+      python examples/libero/main_rs.py"]

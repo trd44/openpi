@@ -1,5 +1,3 @@
-# Run with:
-# docker compose -f examples/libero/compose.yml up --build
 services:
   runtime:
     image: libero
@@ -10,23 +8,33 @@ services:
       dockerfile: examples/libero/Dockerfile
     init: true
     tty: true
-    network_mode: host
-    privileged: true
+    network_mode: host # Keep this for now unless it causes other issues
+    # privileged: true # REMOVE or comment out this line (try removing later)
     volumes:
       - $PWD:/app
       - ../../data:/data
-      - /tmp/.X11-unix:/tmp/.X11-unix:ro
+      # ---> ADD THIS LINE: Mount your local Robosuite source code <---
+      - /home/hrilab/Documents/cycliclxm-slim/CyclicLxM/robosuite:/robosuite_source # Host path : Container path
+      - /home/hrilab/Documents/cycliclxm-slim/CyclicLxM/robosuite-task-zoo:/robosuite_task_zoo_source # Host path : Container path
+      - /tmp/.X11-unix:/tmp/.X11-unix:ro # REMOVE or comment out this line
     environment:
-      - DISPLAY=$DISPLAY
+      # - PYTHONPATH=/robosuite_source:${PYTHONPATH}
+      - PYTHONPATH=/robosuite_source:/app:/app/packages/openpi-client/src:/app/third_party/libero
+
+      - DISPLAY=$DISPLAY # REMOVE or comment out this line
+      # ADD this line (optional, but recommended):
+      - NVIDIA_DRIVER_CAPABILITIES=all
     deploy:
       resources:
         reservations:
           devices:
             - driver: nvidia
               count: 1
-              capabilities: [gpu]
+              # --> FIX: Add 'graphics', 'compute', 'utility' <--
+              capabilities: [gpu, graphics, compute, utility] # Or use [all] for testing
 
   openpi_server:
+    # ... (Keep the openpi_server definition as is, its capabilities: [gpu] is likely fine) ...
     image: openpi_server
     build:
       context: ../..
@@ -41,8 +49,6 @@ services:
       - SERVER_ARGS
       - OPENPI_DATA_HOME=/openpi_assets
       - IS_DOCKER=true
-
-    # Comment out this block if not running on a machine with GPUs.
     deploy:
       resources:
         reservations:
