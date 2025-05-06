@@ -23,9 +23,9 @@ import tyro
 
 
 ENV_NAME = "Hanoi"  #: Robosuite environment (e.g., Stack, Lift, PickPlace)
-PROMPT = f"gently pick up the blue block from the top of the stack"
+PROMPT = f"pick the blue cube from red cube"
 NUM = "0"
-VIDEO_NAME = ENV_NAME + " " + PROMPT + NUM + ".mp4"  #: Filename for the output video
+VIDEO_NAME = "finetune16000_kinova3" + ENV_NAME + " " + PROMPT + NUM + ".mp4"  #: Filename for the output video
 
 @dataclasses.dataclass
 class Args:
@@ -40,7 +40,7 @@ class Args:
 
     # --- Robosuite Environment ---
     env_name: str = ENV_NAME 
-    robots: str = "Panda" #: Robot model to use
+    robots: str = "Kinova3" #: Robot model to use
     controller: str = "OSC_POSE" #: Robosuite controller name
     horizon: int = 500 #: Max steps per episode
     skip_steps: int = 20 #: Number of initial steps to skip (e.g., wait for objects to settle)
