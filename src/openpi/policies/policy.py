@@ -1,6 +1,7 @@
 from collections.abc import Sequence
 import logging
 import pathlib
+import time
 from typing import Any, TypeAlias
 
 import flax
@@ -45,15 +46,21 @@ class Policy(BasePolicy):
         # Make a batch and convert to jax.Array.
         inputs = jax.tree.map(lambda x: jnp.asarray(x)[np.newaxis, ...], inputs)
 
+        start_time = time.monotonic()
         self._rng, sample_rng = jax.random.split(self._rng)
         outputs = {
             "state": inputs["state"],
             "actions": self._sample_actions(sample_rng, _model.Observation.from_dict(inputs), **self._sample_kwargs),
         }
-
-        # Unbatch and convert to np.ndarray.
+        # Unbatch and convert to np.ndarray.        # Unbatch and convert to np.ndarray.
         outputs = jax.tree.map(lambda x: np.asarray(x[0, ...]), outputs)
-        return self._output_transform(outputs)
+        model_time = time.monotonic() - start_time
+
+        outputs = self._output_transform(outputs)
+        outputs["policy_timing"] = {
+            "infer_ms": model_time * 1000,
+        }
+        return outputs
 
     @property
     def metadata(self) -> dict[str, Any]:

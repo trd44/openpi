@@ -133,7 +133,6 @@ TrainConfig(
             asset_id="ur5e",
         ),
         base_config=DataConfig(
-            local_files_only=True,  # True, if dataset is saved locally.
             # This flag determines whether we load the prompt (i.e. the task instruction) from the
             # ``task`` field in the LeRobot dataset. The recommended setting is True.
             prompt_from_task=True,
