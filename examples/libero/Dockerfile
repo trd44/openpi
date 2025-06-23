@@ -60,10 +60,10 @@ EOF
 # CMD ["/bin/bash", "-c", "source /.venv/bin/activate && python examples/libero/main_rs.py"]
 CMD ["/bin/bash", "-c", \
      "source /.venv/bin/activate && \
-      echo 'Installing custom Robosuite source from /robosuite_source...' && \
-      uv pip install --no-cache-dir -e /robosuite_source && \
-      echo 'Installing robosuite_task_zoo dependency...' && \
-      uv pip install --no-cache-dir -e /robosuite_task_zoo_source && \
-      echo 'Custom Robosuite installed.' && \
+    #   echo 'Installing custom Robosuite source from /robosuite_source...' && \
+    #   uv pip install --no-cache-dir -e /robosuite_source && \
+    #   echo 'Installing robosuite_task_zoo dependency...' && \
+    #   uv pip install --no-cache-dir -e /robosuite_task_zoo_source && \
+    #   echo 'Custom Robosuite installed.' && \
       cd /app && \
-      python examples/libero/main_rs.py"]
+      python examples/libero/main.py"]
