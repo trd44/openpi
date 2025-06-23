@@ -18,11 +18,17 @@ services:
       - /home/hrilab/Documents/cycliclxm-slim/CyclicLxM/robosuite-task-zoo:/robosuite_task_zoo_source # Host path : Container path
       - /tmp/.X11-unix:/tmp/.X11-unix:ro # REMOVE or comment out this line
     environment:
+<<<<<<< HEAD
       # - PYTHONPATH=/robosuite_source:${PYTHONPATH}
       - PYTHONPATH=/robosuite_source:/app:/app/packages/openpi-client/src:/app/third_party/libero
 
       - DISPLAY=$DISPLAY # REMOVE or comment out this line
       # ADD this line (optional, but recommended):
+=======
+      - DISPLAY=$DISPLAY
+      - MUJOCO_GL=${MUJOCO_GL:-egl}
+      # - PYTHONPATH=/robosuite_source:/app:/app/packages/openpi-client/src:/app/third_party/libero
+>>>>>>> a047124aac3d1c0eeb743b8cbe739b9bcfcea535
       - NVIDIA_DRIVER_CAPABILITIES=all
     deploy:
       resources:
