@@ -13,22 +13,15 @@ services:
     volumes:
       - $PWD:/app
       - ../../data:/data
-      # ---> ADD THIS LINE: Mount your local Robosuite source code <---
-      - /home/hrilab/Documents/cycliclxm-slim/CyclicLxM/robosuite:/robosuite_source # Host path : Container path
-      - /home/hrilab/Documents/cycliclxm-slim/CyclicLxM/robosuite-task-zoo:/robosuite_task_zoo_source # Host path : Container path
+      # ---> Uncomment to mount local Robosuite source code <---
+      # - /home/hrilab/Documents/cycliclxm-slim/CyclicLxM/robosuite:/robosuite_source # Host path : Container path
+      # - /home/hrilab/Documents/cycliclxm-slim/CyclicLxM/robosuite-task-zoo:/robosuite_task_zoo_source # Host path : Container path
       - /tmp/.X11-unix:/tmp/.X11-unix:ro # REMOVE or comment out this line
     environment:
-<<<<<<< HEAD
       # - PYTHONPATH=/robosuite_source:${PYTHONPATH}
-      - PYTHONPATH=/robosuite_source:/app:/app/packages/openpi-client/src:/app/third_party/libero
-
-      - DISPLAY=$DISPLAY # REMOVE or comment out this line
-      # ADD this line (optional, but recommended):
-=======
+      # - PYTHONPATH=/robosuite_source:/app:/app/packages/openpi-client/src:/app/third_party/libero
       - DISPLAY=$DISPLAY
       - MUJOCO_GL=${MUJOCO_GL:-egl}
-      # - PYTHONPATH=/robosuite_source:/app:/app/packages/openpi-client/src:/app/third_party/libero
->>>>>>> a047124aac3d1c0eeb743b8cbe739b9bcfcea535
       - NVIDIA_DRIVER_CAPABILITIES=all
     deploy:
       resources:
@@ -52,7 +45,7 @@ services:
       - $PWD:/app
       - ${OPENPI_DATA_HOME:-~/.cache/openpi}:/openpi_assets
     environment:
-      - SERVER_ARGS=policy:checkpoint --policy.config pi0_hanoi --policy.dir /app/checkpoints/pi0_hanoi/my_experiment/5000
+      - SERVER_ARGS # Uncomment to point to a finetune =policy:checkpoint --policy.config pi0_hanoi --policy.dir /app/checkpoints/pi0_hanoi/my_experiment/5000
       - OPENPI_DATA_HOME=/openpi_assets
       - IS_DOCKER=true
     deploy:

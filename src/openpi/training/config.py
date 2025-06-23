@@ -736,11 +736,7 @@ _CONFIGS = [
         data=LeRobotLiberoDataConfig(
             repo_id="tduggan93/hanoi_dataset",
             base_config=DataConfig(
-<<<<<<< HEAD
                 # local_files_only=True,  # Set to True for local-only datasets.
-=======
-                local_files_only=True,  # Set to True for local-only datasets.
->>>>>>> a047124aac3d1c0eeb743b8cbe739b9bcfcea535
                 prompt_from_task=True,
             ),
         ),
