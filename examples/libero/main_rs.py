@@ -21,11 +21,11 @@ from openpi_client import image_tools
 from openpi_client import websocket_client_policy as _websocket_client_policy
 import tyro
 
-
+SEED = 9
 ENV_NAME = "Hanoi"  #: Robosuite environment (e.g., Stack, Lift, PickPlace)
-PROMPT = f"pick the blue cube from red cube"
+PROMPT = f"Pick up the blue block."
 NUM = "0"
-VIDEO_NAME = "finetune16000_kinova3" + ENV_NAME + " " + PROMPT + NUM + ".mp4"  #: Filename for the output video
+VIDEO_NAME =f"60k {ENV_NAME} seed {SEED} Panda {PROMPT}.mp4"  #: Filename for the output video
 
 @dataclasses.dataclass
 class Args:
@@ -40,10 +40,10 @@ class Args:
 
     # --- Robosuite Environment ---
     env_name: str = ENV_NAME 
-    robots: str = "Kinova3" #: Robot model to use
+    robots: str = "Panda" #: Robot model to use
     controller: str = "OSC_POSE" #: Robosuite controller name
     horizon: int = 500 #: Max steps per episode
-    skip_steps: int = 20 #: Number of initial steps to skip (e.g., wait for objects to settle)
+    skip_steps: int = 50 #: Number of initial steps to skip (e.g., wait for objects to settle)
 
     # --- Rendering & Video ---
     render_mode: str = "headless" #: Rendering mode: 'headless' (save video) or 'human' (live view via X11)
@@ -56,7 +56,7 @@ class Args:
     camera_width: int = 256 #: Rendered camera width (before potential resize)
 
     # --- Misc ---
-    seed: int = 7 #: Random seed
+    seed: int = SEED #: Random seed
 
 
 def run_robosuite_with_openpi(args: Args) -> None:
@@ -95,6 +95,7 @@ def run_robosuite_with_openpi(args: Args) -> None:
         render_camera="agentview" if has_renderer else None,
         ignore_done=True, # Let horizon end the episode
         hard_reset=False, # Faster resets can sometimes be unstable, switch if needed
+        random_reset=False
     )
     try:
         env.seed(args.seed)
@@ -168,6 +169,7 @@ def run_robosuite_with_openpi(args: Args) -> None:
 
             img_obs = obs["agentview_image"]
             wrist_obs = obs["robot0_eye_in_hand_image"]
+            # gripper_qpos_obs = translate_12_state_to_8(obs)
 
             # Rotate 180 degrees
             img = np.ascontiguousarray(img_obs[::-1, ::-1]) # Rotate
@@ -189,38 +191,68 @@ def run_robosuite_with_openpi(args: Args) -> None:
         except Exception as e:
              logging.error(f"Error during preprocessing at step {t}: {e}")
              break
+        eef_pos = obs.get('robot0_eef_pos', np.zeros(3, dtype=np.float32))
+        eef_quat = obs.get('robot0_eef_quat', np.array([0., 0., 0., 1.], dtype=np.float32))
+        eef_axis_angle = _quat2axisangle(eef_quat)
+        # eef_euler = quaternion_to_euler(eef_quat)  # (3,)
+
+        eef_state = np.concatenate([eef_pos, eef_axis_angle])  # (6,)
+
+        gripper_qpos = np.array(obs.get('robot0_gripper_qpos', [0., 0.]), dtype=np.float32)
+        # If only one value, duplicate to 2D for RLDS compatibility
+        if gripper_qpos.shape[0] == 1:
+            gripper_state = np.array([gripper_qpos[0], gripper_qpos[0]], dtype=np.float32)
+        else:
+            gripper_state = gripper_qpos[:2]
+
+        state_vec = np.concatenate([eef_state, gripper_state]).astype(np.float32)  # shape (8,)
 
         # --- Get Action from OpenPI Server ---
         if not action_plan:
             element = {
                 "observation/image": img,
                 "observation/wrist_image": wrist_img,
-                "observation/state": np.concatenate(
-                    (
-                        obs['robot0_eef_pos'], 
-                        _quat2axisangle(obs['robot0_eef_quat']), 
-                        obs['robot0_gripper_qpos'],
-                    )
-                ),
+                "observation/state": state_vec,
                 # "prompt": f"Complete the {args.env_name} task",
                 "prompt": PROMPT,
             }
+            # print(f"EEF Pos = {obs['robot0_eef_pos']}")
+            # print(f"Axis angle = {_quat2axisangle(obs['robot0_eef_quat'])}")
+            # print(f"Gripper qpos = {gripper_qpos_obs}")
+            # print(f"state_vec = {element['observation/state']}")
             logging.debug("Requesting inference from server...")
             try:
+                # --- Debug prints before sending to server ---
+                # print("==== Sending element to OpenPI server ====")
+                # print("Prompt:", element.get("prompt"))
+                # print("Observation/image shape:", element["observation/image"].shape, "dtype:", element["observation/image"].dtype)
+                # print("Observation/wrist_image shape:", element["observation/wrist_image"].shape, "dtype:", element["observation/wrist_image"].dtype)
+                # print("Observation/state:", element["observation/state"])
+
                 inf_start = time.time()
                 inference_result = client.infer(element)
                 logging.debug(f"Inference time: {time.time() - inf_start:.4f}s")
+
+                # --- Debug prints after receiving server response ---
+                # print("==== Received inference_result from OpenPI server ====")
+                # print("Raw inference_result:", inference_result)
 
                 if "actions" not in inference_result:
                     logging.error(f"Server response missing 'actions': {inference_result}")
                     break
                 action_chunk = inference_result["actions"]
 
+                # --- Debug print for action_chunk ---
+                # print("Action chunk type:", type(action_chunk))
+                # if isinstance(action_chunk, np.ndarray):
+                #     print("Action chunk shape:", action_chunk.shape, "dtype:", action_chunk.dtype)
+                #     print("Action chunk sample (first 1):", action_chunk[:1])
+
                 if not isinstance(action_chunk, np.ndarray) or action_chunk.size == 0:
-                     logging.warning("Policy server returned empty or invalid action chunk.")
-                     # Send zero action as fallback
-                     action_chunk = np.zeros((args.replan_steps, env.action_dim))
-                     if env.robots[0].gripper.dof > 0: action_chunk[:, 6] = -1.0 # Keep gripper closed?
+                    logging.warning("Policy server returned empty or invalid action chunk.")
+                    # Send zero action as fallback
+                    action_chunk = np.zeros((args.replan_steps, env.action_dim))
+                    if env.robots[0].gripper.dof > 0: action_chunk[:, 6] = -1.0 # Keep gripper closed?
 
                 # Ensure chunk shape is reasonable (at least N, action_dim)
                 if len(action_chunk.shape) != 2 or action_chunk.shape[1] != env.action_dim:
@@ -232,6 +264,9 @@ def run_robosuite_with_openpi(args: Args) -> None:
 
             except Exception as e:
                 logging.error(f"Failed to get inference from server: {e}")
+                import traceback
+                print("Exception occurred during inference:")
+                traceback.print_exc()
                 break # Exit loop
 
         # Get next action
@@ -291,6 +326,55 @@ def run_robosuite_with_openpi(args: Args) -> None:
     logging.info("Environment closed.")
 
 
+# def translate_12_state_to_8(obs_dict):
+#     # --- 3. Extract/Construct Proprioceptive State ---
+#     # Reduced form for proprioceptive state - 7 joint positions and 1
+#     EXPECTED_STATE_DIM = 8
+#     # --- Gripper QPOS interpretation (NEEDS USER INPUT FROM XML) ---
+#     # Example: Assume first joint in qpos is main actuator
+#     GRIPPER_QPOS_INDEX = 0
+#     # Find these limits in your specific Kinova gripper XML file!
+#     GRIPPER_JOINT_MIN = 0.0 # Example Placeholder
+#     GRIPPER_JOINT_MAX = 0.8 # Example Placeholder (e.g., Robotiq 2F-85 range)
+#     # ---
+#     try:
+#         # --- Define keys and expected dimensions (EXAMPLE for Panda) ---
+#         # --- ADJUST KEYS AND DIMS FOR KINOVA3 ---
+#         # print(obs_dict.keys())
+#         joint_sin = obs_dict['robot0_joint_pos_sin']
+#         joint_cos = obs_dict['robot0_joint_pos_cos']
+#         # Calculate the 7 joint angles in radians
+#         arm_joint_positions = np.arctan2(joint_sin, joint_cos)
+
+#         # --- Get 1 Gripper State value by interpreting qpos ---
+#         gripper_qpos = obs_dict.get('robot0_gripper_qpos')
+#         kinova_gripper_state_norm = 0.0 # Default value
+
+#         if gripper_qpos is not None and len(gripper_qpos) > GRIPPER_QPOS_INDEX:
+#             current_joint_val = gripper_qpos[GRIPPER_QPOS_INDEX]
+#             # Normalize based on known limits (USER MUST PROVIDE)
+#             if GRIPPER_JOINT_MAX > GRIPPER_JOINT_MIN:
+#                 kinova_gripper_state_norm = (current_joint_val - GRIPPER_JOINT_MIN) / (GRIPPER_JOINT_MAX - GRIPPER_JOINT_MIN)
+#                 kinova_gripper_state_norm = np.clip(kinova_gripper_state_norm, 0.0, 1.0)
+#             else:
+#                 print(f"Warning: Invalid gripper joint limits [{GRIPPER_JOINT_MIN}, {GRIPPER_JOINT_MAX}].")
+#         else:
+#             print(f"Warning: 'robot0_gripper_qpos' not found or too short. Using 0.0 for gripper.")
+#         kinova_gripper_state = np.array([kinova_gripper_state_norm], dtype=np.float32) # Shape (1,)
+#         # # --- Concatenate into 8-element state vector ---
+#         # proprio_state = np.concatenate([
+#         #     arm_joint_positions,    # 7 elements
+#         #     kinova_gripper_state    # 1 element
+#         # ]).astype(np.float32)
+#         # ---
+#         return kinova_gripper_state
+
+#     except (KeyError, ValueError, TypeError) as e:
+#         print(f"Error constructing proprio state manually in step {step_index}: {e}. Using zeros.")
+#         proprio_state = np.zeros(EXPECTED_STATE_DIM, dtype=np.float32)
+#         return 0
+
+
 def _quat2axisangle(quat):
     """
     Copied from robosuite: 
@@ -310,6 +394,21 @@ def _quat2axisangle(quat):
 
     return (quat[:3] * 2.0 * math.acos(quat[3])) / den
 
+def quaternion_to_euler(quat: np.ndarray) -> np.ndarray:
+    """Convert a quaternion (x, y, z, w) to Euler angles (roll, pitch, yaw)."""
+    x, y, z, w = quat
+    # Roll (x-axis rotation)
+    sinr_cosp = 2 * (w * x + y * z)
+    cosr_cosp = 1 - 2 * (x * x + y * y)
+    roll = np.arctan2(sinr_cosp, cosr_cosp)
+    # Pitch (y-axis rotation)
+    sinp = 2 * (w * y - z * x)
+    pitch = np.arcsin(np.clip(sinp, -1.0, 1.0))
+    # Yaw (z-axis rotation)
+    siny_cosp = 2 * (w * z + x * y)
+    cosy_cosp = 1 - 2 * (y * y + z * z)
+    yaw = np.arctan2(siny_cosp, cosy_cosp)
+    return np.array([roll, pitch, yaw], dtype=np.float32)
 
 if __name__ == "__main__":
     logging.basicConfig(
