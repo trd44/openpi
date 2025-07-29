@@ -22,6 +22,7 @@ import openpi.policies.droid_policy as droid_policy
 import openpi.policies.libero_policy as libero_policy
 import openpi.shared.download as _download
 import openpi.shared.normalize as _normalize
+import openpi.training.droid_rlds_dataset as droid_rlds_dataset
 import openpi.training.optimizer as _optimizer
 import openpi.training.weight_loaders as weight_loaders
 import openpi.transforms as _transforms
@@ -43,7 +44,7 @@ class AssetsConfig:
 
     ```
     AssetsConfig(
-        assets_dir="s3://openpi-assets/checkpoints/pi0_base/assets",
+        assets_dir="gs://openpi-assets/checkpoints/pi0_base/assets",
         asset_id="trossen",
     )
     ```
@@ -87,8 +88,10 @@ class DataConfig:
     # If true, will use the LeRobot dataset task to define the prompt.
     prompt_from_task: bool = False
 
-    # If true, will disable syncing the dataset from the Hugging Face Hub. Allows training on local-only datasets.
-    local_files_only: bool = False
+    # Only used for RLDS data loader (ie currently only used for DROID).
+    rlds_data_dir: str | None = None
+    # Action space for DROID dataset.
+    action_space: droid_rlds_dataset.DroidActionSpace | None = None
 
 
 class GroupFactory(Protocol):
@@ -324,6 +327,60 @@ class LeRobotLiberoDataConfig(DataConfigFactory):
 
 
 @dataclasses.dataclass(frozen=True)
+class RLDSDroidDataConfig(DataConfigFactory):
+    """
+    Config for training on DROID, using RLDS data format (for efficient training on larger datasets).
+    """
+
+    rlds_data_dir: str | None = None
+    action_space: droid_rlds_dataset.DroidActionSpace | None = None
+
+    @override
+    def create(self, assets_dirs: pathlib.Path, model_config: _model.BaseModelConfig) -> DataConfig:
+        repack_transform = _transforms.Group(
+            inputs=[
+                _transforms.RepackTransform(
+                    {
+                        "observation/exterior_image_1_left": "observation/image",
+                        "observation/wrist_image_left": "observation/wrist_image",
+                        "observation/joint_position": "observation/joint_position",
+                        "observation/gripper_position": "observation/gripper_position",
+                        "actions": "actions",
+                        "prompt": "prompt",
+                    }
+                )
+            ]
+        )
+
+        data_transforms = _transforms.Group(
+            inputs=[droid_policy.DroidInputs(action_dim=model_config.action_dim, model_type=model_config.model_type)],
+            outputs=[droid_policy.DroidOutputs()],
+        )
+
+        if self.action_space == droid_rlds_dataset.DroidActionSpace.JOINT_POSITION:
+            # Data loader returns absolute joint position actions -- convert to delta actions for training.
+            delta_action_mask = _transforms.make_bool_mask(7, -1)
+            data_transforms = data_transforms.push(
+                inputs=[_transforms.DeltaActions(delta_action_mask)],
+                outputs=[_transforms.AbsoluteActions(delta_action_mask)],
+            )
+
+        model_transforms = ModelTransformFactory()(model_config)
+
+        assert self.rlds_data_dir is not None, "Need to set rlds data dir for RLDS data loader."
+
+        return dataclasses.replace(
+            self.create_base_config(assets_dirs),
+            repack_transforms=repack_transform,
+            data_transforms=data_transforms,
+            model_transforms=model_transforms,
+            use_quantile_norm=model_config.model_type == ModelType.PI0_FAST,
+            rlds_data_dir=self.rlds_data_dir,
+            action_space=self.action_space,
+        )
+
+
+@dataclasses.dataclass(frozen=True)
 class TrainConfig:
     # Name of the config. Must be unique. Will be used to reference this config.
     name: tyro.conf.Suppress[str]
@@ -422,6 +479,7 @@ _CONFIGS = [
         data=LeRobotAlohaDataConfig(
             assets=AssetsConfig(asset_id="trossen"),
         ),
+        policy_metadata={"reset_pose": [0, -1.5, 1.5, 0, 0, 0]},
     ),
     TrainConfig(
         name="pi0_aloha_towel",
@@ -430,6 +488,7 @@ _CONFIGS = [
             assets=AssetsConfig(asset_id="trossen"),
             default_prompt="fold the towel",
         ),
+        policy_metadata={"reset_pose": [0, -1.5, 1.5, 0, 0, 0]},
     ),
     TrainConfig(
         name="pi0_aloha_tupperware",
@@ -438,6 +497,7 @@ _CONFIGS = [
             assets=AssetsConfig(asset_id="trossen"),
             default_prompt="open the tupperware and put the food on the plate",
         ),
+        policy_metadata={"reset_pose": [0, -1.5, 1.5, 0, 0, 0]},
     ),
     #
     # Inference DROID configs.
@@ -491,7 +551,6 @@ _CONFIGS = [
         data=LeRobotLiberoDataConfig(
             repo_id="physical-intelligence/libero",
             base_config=DataConfig(
-                local_files_only=False,  # Set to True for local-only datasets.
                 # This flag determines whether we load the prompt (i.e. the task instruction) from the
                 # ``task`` field in the LeRobot dataset. If set to True, the prompt will show up in
                 # a field called ``prompt`` in the input dict. The recommended setting is True.
@@ -500,7 +559,7 @@ _CONFIGS = [
         ),
         # Here you define which pre-trained checkpoint you want to load to initialize the model.
         # This should match the model config you chose above -- i.e. in this case we use the pi0 base model.
-        weight_loader=weight_loaders.CheckpointWeightLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
+        weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi0_base/params"),
         # Below you can define other hyperparameters like the learning rate, number of training steps, etc.
         # Check the base TrainConfig class for a full list of available hyperparameters.
         num_train_steps=30_000,
@@ -511,12 +570,9 @@ _CONFIGS = [
         model=pi0.Pi0Config(paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"),
         data=LeRobotLiberoDataConfig(
             repo_id="physical-intelligence/libero",
-            base_config=DataConfig(
-                local_files_only=False,  # Set to True for local-only datasets.
-                prompt_from_task=True,
-            ),
+            base_config=DataConfig(prompt_from_task=True),
         ),
-        weight_loader=weight_loaders.CheckpointWeightLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
+        weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi0_base/params"),
         num_train_steps=30_000,
         # The freeze filter defines which parameters should be frozen during training.
         # We have a convenience function in the model config that returns the default freeze filter
@@ -543,13 +599,10 @@ _CONFIGS = [
         model=pi0_fast.Pi0FASTConfig(action_dim=7, action_horizon=10, max_token_len=180),
         data=LeRobotLiberoDataConfig(
             repo_id="physical-intelligence/libero",
-            base_config=DataConfig(
-                local_files_only=False,  # Set to True for local-only datasets.
-                prompt_from_task=True,
-            ),
+            base_config=DataConfig(prompt_from_task=True),
         ),
         # Note that we load the pi0-FAST base model checkpoint here.
-        weight_loader=weight_loaders.CheckpointWeightLoader("s3://openpi-assets/checkpoints/pi0_fast_base/params"),
+        weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi0_fast_base/params"),
         num_train_steps=30_000,
     ),
     TrainConfig(
@@ -561,12 +614,9 @@ _CONFIGS = [
         ),
         data=LeRobotLiberoDataConfig(
             repo_id="physical-intelligence/libero",
-            base_config=DataConfig(
-                local_files_only=False,  # Set to True for local-only datasets.
-                prompt_from_task=True,
-            ),
+            base_config=DataConfig(prompt_from_task=True),
         ),
-        weight_loader=weight_loaders.CheckpointWeightLoader("s3://openpi-assets/checkpoints/pi0_fast_base/params"),
+        weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi0_fast_base/params"),
         num_train_steps=30_000,
         # Again, make sure to match the model config above when extracting the freeze filter
         # that specifies which parameters should be frozen during LoRA finetuning.
@@ -587,7 +637,7 @@ _CONFIGS = [
         data=LeRobotAlohaDataConfig(
             repo_id="physical-intelligence/aloha_pen_uncap_diverse",
             assets=AssetsConfig(
-                assets_dir="s3://openpi-assets/checkpoints/pi0_base/assets",
+                assets_dir="gs://openpi-assets/checkpoints/pi0_base/assets",
                 asset_id="trossen",
             ),
             default_prompt="uncap the pen",
@@ -606,14 +656,43 @@ _CONFIGS = [
                     )
                 ]
             ),
-            base_config=DataConfig(
-                local_files_only=False,  # Set to True for local-only datasets.
-            ),
         ),
-        weight_loader=weight_loaders.CheckpointWeightLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
+        weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi0_base/params"),
         num_train_steps=20_000,
     ),
-    # This config is used to demonstrate how to train on a simple simulated environment.
+    #
+    # Fine-tuning DROID configs.
+    #
+    TrainConfig(
+        name="pi0_fast_droid_finetune",
+        model=pi0_fast.Pi0FASTConfig(
+            action_dim=8,
+            action_horizon=16,
+            max_token_len=180,
+        ),
+        data=RLDSDroidDataConfig(
+            repo_id="droid",
+            # Set this to the path to your DROID RLDS dataset (the parent directory of the `droid` directory).
+            rlds_data_dir="<path_to_droid_rlds_dataset>",
+            action_space=droid_rlds_dataset.DroidActionSpace.JOINT_POSITION,
+        ),
+        weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi0_fast_base/params"),
+        lr_schedule=_optimizer.CosineDecaySchedule(
+            warmup_steps=1_000,
+            peak_lr=5e-5,
+            decay_steps=1_000_000,
+            decay_lr=5e-5,
+        ),
+        num_train_steps=100_000,  # 100k steps should be sufficient, takes ~2 days on 8x H100s
+        batch_size=256,
+        log_interval=100,
+        save_interval=5000,
+        keep_period=20_000,
+        num_workers=0,  # Important: RLDS DataLoader requires num_workers=0, handles multi-processing internally
+    ),
+    #
+    # ALOHA Sim configs. This config is used to demonstrate how to train on a simple simulated environment.
+    #
     TrainConfig(
         name="pi0_aloha_sim",
         model=pi0.Pi0Config(),
@@ -622,7 +701,7 @@ _CONFIGS = [
             default_prompt="Transfer cube",
             use_delta_joint_actions=False,
         ),
-        weight_loader=weight_loaders.CheckpointWeightLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
+        weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi0_base/params"),
         num_train_steps=20_000,
     ),
     #
@@ -706,7 +785,7 @@ _CONFIGS = [
         data=LeRobotLiberoDataConfig(
             repo_id="tduggan93/hanoi_full_lerobot",
             base_config=DataConfig(
-                local_files_only=True,  # Set to True for local-only datasets.
+                # local_files_only=True,  # Set to True for local-only datasets.
                 prompt_from_task=True,
             ),
         ),
