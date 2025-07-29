@@ -9,16 +9,16 @@ services:
     init: true
     tty: true
     network_mode: host # Keep this for now unless it causes other issues
-    # privileged: true # REMOVE or comment out this line (try removing later)
+    privileged: true # REMOVE or comment out this line (try removing later)
     volumes:
       - $PWD:/app
       - ../../data:/data
       # ---> ADD THIS LINE: Mount your local Robosuite source code <---
-      - /home/hrilab/Documents/cycliclxm-slim/CyclicLxM/robosuite:/robosuite_source # Host path : Container path
-      - /home/hrilab/Documents/cycliclxm-slim/CyclicLxM/robosuite-task-zoo:/robosuite_task_zoo_source # Host path : Container path
+      - /home/hrilab/Documents/.vlas/cycliclxm-slim/CyclicLxM/robosuite:/robosuite_source # Host path : Container path
+      - /home/hrilab/Documents/.vlas/cycliclxm-slim/CyclicLxM/robosuite-task-zoo:/robosuite_task_zoo_source # Host path : Container path
       - /tmp/.X11-unix:/tmp/.X11-unix:ro # REMOVE or comment out this line
     environment:
-      # - PYTHONPATH=/robosuite_source:${PYTHONPATH}
+      - PYTHONPATH=/robosuite_source:${PYTHONPATH}
       - PYTHONPATH=/robosuite_source:/app:/app/packages/openpi-client/src:/app/third_party/libero
 
       - DISPLAY=$DISPLAY # REMOVE or comment out this line
@@ -46,7 +46,7 @@ services:
       - $PWD:/app
       - ${OPENPI_DATA_HOME:-~/.cache/openpi}:/openpi_assets
     environment:
-      - SERVER_ARGS=policy:checkpoint --policy.config pi0_hanoi --policy.dir /app/checkpoints/pi0_hanoi/my_experiment/5000
+      - SERVER_ARGS=policy:checkpoint --policy.config pi0_hanoi_base --policy.dir /app/checkpoints/pi0_hanoi_base_continue/continue_training/29999
       - OPENPI_DATA_HOME=/openpi_assets
       - IS_DOCKER=true
     deploy:
