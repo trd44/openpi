@@ -21,11 +21,12 @@ from openpi_client import image_tools
 from openpi_client import websocket_client_policy as _websocket_client_policy
 import tyro
 
-SEED = 9
+SEED = 3
 ENV_NAME = "Hanoi"  #: Robosuite environment (e.g., Stack, Lift, PickPlace)
 PROMPT = f"Pick up the blue block."
-NUM = "0"
-VIDEO_NAME =f"60k {ENV_NAME} seed {SEED} Panda {PROMPT}.mp4"  #: Filename for the output video
+REPLAN_STEPS = 100
+HORIZON = 2000
+VIDEO_NAME =f"fixed 27k rs {REPLAN_STEPS} horizon {HORIZON} {ENV_NAME} seed {SEED} Panda {PROMPT}.mp4"  #: Filename for the output video
 
 @dataclasses.dataclass
 class Args:
@@ -36,13 +37,13 @@ class Args:
 
     # --- Policy Interaction ---
     resize_size: int = 224 #: Target size for image resizing (must match model training)
-    replan_steps: int = 5 #: Number of steps per action chunk from policy server
+    replan_steps: int = REPLAN_STEPS #: Number of steps per action chunk from policy server
 
     # --- Robosuite Environment ---
     env_name: str = ENV_NAME 
     robots: str = "Panda" #: Robot model to use
     controller: str = "OSC_POSE" #: Robosuite controller name
-    horizon: int = 500 #: Max steps per episode
+    horizon: int = HORIZON #: Max steps per episode
     skip_steps: int = 50 #: Number of initial steps to skip (e.g., wait for objects to settle)
 
     # --- Rendering & Video ---
@@ -172,8 +173,8 @@ def run_robosuite_with_openpi(args: Args) -> None:
             # gripper_qpos_obs = translate_12_state_to_8(obs)
 
             # Rotate 180 degrees
-            img = np.ascontiguousarray(img_obs[::-1, ::-1]) # Rotate
-            wrist_img = np.ascontiguousarray(wrist_obs[::-1, ::-1]) # Rotate
+            img = np.ascontiguousarray(img_obs[::-1, ::-1], dtype=np.uint8) # Rotate
+            wrist_img = np.ascontiguousarray(wrist_obs[::-1, ::-1], dtype=np.uint8) # Rotate
 
             # Resize and pad
             img = image_tools.convert_to_uint8(
@@ -191,28 +192,36 @@ def run_robosuite_with_openpi(args: Args) -> None:
         except Exception as e:
              logging.error(f"Error during preprocessing at step {t}: {e}")
              break
+        # eef_pos = obs.get('robot0_eef_pos', np.zeros(3, dtype=np.float32))
+        # eef_quat = obs.get('robot0_eef_quat', np.array([0., 0., 0., 1.], dtype=np.float32))
+        # eef_axis_angle = _quat2axisangle(eef_quat)
+        # # eef_euler = quaternion_to_euler(eef_quat)  # (3,)
+
+        # eef_state = np.concatenate([eef_pos, eef_axis_angle])  # (6,)
+        # STATE (END EFFECTOR)
         eef_pos = obs.get('robot0_eef_pos', np.zeros(3, dtype=np.float32))
         eef_quat = obs.get('robot0_eef_quat', np.array([0., 0., 0., 1.], dtype=np.float32))
+        eef_gripper = obs.get('robot0_gripper_qpos', np.zeros(2, dtype=np.float32))
+        # Convert quaternion to axis angle
         eef_axis_angle = _quat2axisangle(eef_quat)
-        # eef_euler = quaternion_to_euler(eef_quat)  # (3,)
 
-        eef_state = np.concatenate([eef_pos, eef_axis_angle])  # (6,)
+        eef_state = np.concatenate((eef_pos, eef_axis_angle, eef_gripper)).astype(np.float32)
 
-        gripper_qpos = np.array(obs.get('robot0_gripper_qpos', [0., 0.]), dtype=np.float32)
-        # If only one value, duplicate to 2D for RLDS compatibility
-        if gripper_qpos.shape[0] == 1:
-            gripper_state = np.array([gripper_qpos[0], gripper_qpos[0]], dtype=np.float32)
-        else:
-            gripper_state = gripper_qpos[:2]
+        # gripper_qpos = np.array(obs.get('robot0_gripper_qpos', [0., 0.]), dtype=np.float32)
+        # # If only one value, duplicate to 2D for RLDS compatibility
+        # if gripper_qpos.shape[0] == 1:
+        #     gripper_state = np.array([gripper_qpos[0], gripper_qpos[0]], dtype=np.float32)
+        # else:
+        #     gripper_state = gripper_qpos[:2]
 
-        state_vec = np.concatenate([eef_state, gripper_state]).astype(np.float32)  # shape (8,)
+        # state_vec = np.concatenate([eef_state, gripper_state]).astype(np.float32)  # shape (8,)
 
         # --- Get Action from OpenPI Server ---
         if not action_plan:
             element = {
                 "observation/image": img,
                 "observation/wrist_image": wrist_img,
-                "observation/state": state_vec,
+                "observation/state": eef_state,
                 # "prompt": f"Complete the {args.env_name} task",
                 "prompt": PROMPT,
             }
