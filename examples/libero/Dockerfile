@@ -67,5 +67,6 @@ CMD ["/bin/bash", "-c", \
     echo 'Installing robosuite_task_zoo dependency...' && \
     uv pip install --no-cache-dir -e /robosuite_task_zoo_source && \
     echo 'Custom Robosuite installed.' && \
+    uv pip install wandb && \
     cd /app && \
     python examples/libero/main_rs.py"]
