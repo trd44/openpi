@@ -736,7 +736,7 @@ _CONFIGS = [
         data=LeRobotLiberoDataConfig(
             repo_id="tduggan93/hanoi_full_lerobot",
             base_config=DataConfig(
-                local_files_only=True,  # Set to True for local-only datasets.
+                # local_files_only=True,  # Set to True for local-only datasets.
                 prompt_from_task=True,
             ),
         ),
@@ -759,7 +759,7 @@ _CONFIGS = [
         data=LeRobotLiberoDataConfig(
             repo_id="tduggan93/hanoi_full_lerobot",
             base_config=DataConfig(
-                local_files_only=True,  # Set to True for local-only datasets.
+                # local_files_only=True,  # Set to True for local-only datasets.
                 prompt_from_task=True,
             ),
         ),
@@ -806,7 +806,7 @@ _CONFIGS = [
         data=LeRobotLiberoDataConfig(
             repo_id="tduggan93/hanoi_fixed_lerobot",
             base_config=DataConfig(
-                local_files_only=True,  # Set to True for local-only datasets.
+                # local_files_only=True,  # Set to True for local-only datasets.
                 prompt_from_task=True,
             ),
         ),
