@@ -39,12 +39,12 @@ TARGET_TASK_SUITE_NAME = "libero_10"
 # for i, task_obj in enumerate(task_suite_obj.tasks):
 #     print(f"  ID: {i}, Name: {task_obj.name}, Description: {task_obj.language}")
 # """
-TARGET_TASK_ID = 0 # Index of the task within the TARGET_TASK_SUITE_NAME (e.g., 0 for the first task)
+TARGET_TASK_ID = 1 # Index of the task within the TARGET_TASK_SUITE_NAME (e.g., 0 for the first task)
 
 # How many different initial states (trials) of this specific task to attempt.
 # If NUM_TRIALS_FOR_SELECTED_TASK is more than available initial states for the task,
 # it will run for the number of available initial states.
-NUM_TRIALS_FOR_SELECTED_TASK = 3
+NUM_TRIALS_FOR_SELECTED_TASK = 20
 
 # Simulation parameters
 NUM_STEPS_WAIT = 10  # Number of steps to wait for objects to stabilize in sim after reset/action
@@ -105,7 +105,8 @@ def run_episode(
     current_replan_steps: int,
     current_resize_size: int,
     current_num_steps_wait: int,
-    current_video_out_path: str
+    current_video_out_path: str,
+    save_only_failures: bool = False,
 ): # Returns a tuple (bool, int)
     """
     Runs a single episode in the environment.
@@ -196,6 +197,9 @@ def run_episode(
     # Save video
     video_suffix = "success" if done else "failure"
     video_file_path = pathlib.Path(current_video_out_path) / f"{video_filename_prefix}_{video_suffix}.mp4"
+    if save_only_failures and done:
+        logging.info("Episode succeeded and save_only_failures=True, so not saving video.")
+        return done, (t - current_num_steps_wait if t >= current_num_steps_wait else 0)
     try:
         imageio.mimwrite(video_file_path, [np.asarray(frame) for frame in replay_images], fps=10)
         logging.info(f"Saved video to: {video_file_path}")
@@ -304,7 +308,8 @@ def evaluate_selected_task():
             current_replan_steps=REPLAN_STEPS,
             current_resize_size=RESIZE_SIZE,
             current_num_steps_wait=NUM_STEPS_WAIT,
-            current_video_out_path=VIDEO_OUT_PATH
+            current_video_out_path=VIDEO_OUT_PATH,
+            save_only_failures=True, # Change to True to save only failure videos
         )
         
         total_episodes_run += 1
