@@ -75,6 +75,9 @@ class Pi0Config(_model.BaseModelConfig):
     action_horizon: int = 50
     max_token_len: int = 48
 
+    # Optional: dims in the action vector to ignore (0-weight in loss)
+    ignore_action_dims: tuple[int, ...] = ()
+
     @property
     @override
     def model_type(self) -> _model.ModelType:
@@ -171,6 +174,9 @@ class Pi0(_model.BaseModel):
         self.action_time_mlp_out = nnx.Linear(action_expert_config.width, action_expert_config.width, rngs=rngs)
         self.action_out_proj = nnx.Linear(action_expert_config.width, config.action_dim, rngs=rngs)
 
+        # Store ignore indices as a static Python tuple; build mask on the fly in compute_loss.
+        self._ignore_action_dims = tuple(config.ignore_action_dims)
+
     @at.typecheck
     def embed_prefix(
         self, obs: _model.Observation
@@ -263,7 +269,12 @@ class Pi0(_model.BaseModel):
         )
         v_t = self.action_out_proj(suffix_out[:, -self.action_horizon :])
 
-        return jnp.mean(jnp.square(v_t - u_t), axis=-1)
+        err2 = jnp.square(v_t - u_t)                                 # [*b, ah, ad]
+        mask = jnp.ones((err2.shape[-1],), dtype=err2.dtype)         # [ad]
+        if self._ignore_action_dims:
+            mask = mask.at[jnp.array(self._ignore_action_dims)].set(0.0)
+        denom = jnp.maximum(1.0, jnp.sum(mask))                      # scalar
+        return jnp.sum(err2 * mask, axis=-1) / denom                 # [*b, ah]
 
     @override
     def sample_actions(
