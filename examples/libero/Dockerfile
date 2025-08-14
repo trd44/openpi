@@ -69,4 +69,4 @@ CMD ["/bin/bash", "-c", \
     echo 'Custom Robosuite installed.' && \
     uv pip install wandb && \
     cd /app && \
-    python examples/libero/main_rs.py"]
+    python examples/libero/main_hanoi.py"]
