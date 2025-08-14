@@ -23,9 +23,9 @@ import tyro
 
 SEED = 3
 ENV_NAME = "Hanoi"  #: Robosuite environment (e.g., Stack, Lift, PickPlace)
-PROMPT = f"Pick up the blue block."
-REPLAN_STEPS = 100
-HORIZON = 2000
+PROMPT = f"Place the green block in the right area."
+REPLAN_STEPS = 50
+HORIZON = 5000
 VIDEO_NAME =f"fixed 27k rs {REPLAN_STEPS} horizon {HORIZON} {ENV_NAME} seed {SEED} Panda {PROMPT}.mp4"  #: Filename for the output video
 
 @dataclasses.dataclass
@@ -286,19 +286,24 @@ def run_robosuite_with_openpi(args: Args) -> None:
              action = np.zeros(env.action_dim)
              if env.robots[0].gripper.dof > 0: action[6] = -1.0 # Keep gripper closed?
 
+        action = action.tolist()
+        action[3] = 0
+        action[4] = 0
+        action[5] = 0
+
         # --- Step Environment ---
-        try:
-            # Ensure action is numpy array and correct shape before tolist()
-            if not isinstance(action, np.ndarray): action = np.array(action) # Convert if needed
-            if action.shape[0] != env.action_dim:
-                logging.error(f"Action dimension mismatch before step. Policy: {action.shape[0]}, Env: {env.action_dim}")
-                break
-            obs, reward, done, info = env.step(action.tolist()) # Must match env.action_space!
-            total_reward += reward
-            t += 1
-        except Exception as e:
-            logging.error(f"Error during env.step at step {t}: {e}")
-            break
+        # try:
+        #     # Ensure action is numpy array and correct shape before tolist()
+        #     if not isinstance(action, np.ndarray): action = np.array(action) # Convert if needed
+        #     if action.shape[0] != env.action_dim:
+        #         logging.error(f"Action dimension mismatch before step. Policy: {action.shape[0]}, Env: {env.action_dim}")
+        #         break
+        obs, reward, done, info = env.step(action) # Must match env.action_space!
+        total_reward += reward
+        t += 1
+        # except Exception as e:
+        #     logging.error(f"Error during env.step at step {t}: {e}")
+        #     break
 
         # Render step if requested
         if has_renderer:
