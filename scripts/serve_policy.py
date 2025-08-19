@@ -2,6 +2,12 @@ import dataclasses
 import enum
 import logging
 import socket
+# Add these lines for debugging
+# import debugpy
+# debugpy.listen(5678)
+# print("Waiting for debugger attach...")
+# debugpy.wait_for_client()
+# print("Debugger attached!")
 
 import tyro
 
@@ -28,6 +34,8 @@ class Checkpoint:
     config: str
     # Checkpoint directory (e.g., "checkpoints/pi0_aloha_sim/exp/10000").
     dir: str
+    # Optional sample kwargs to pass to the policy.
+    sample_kwargs: dict[str, str] | None = None
 
 
 @dataclasses.dataclass
@@ -54,6 +62,11 @@ class Args:
     # Specifies how to load the policy. If not provided, the default policy for the environment will be used.
     policy: Checkpoint | Default = dataclasses.field(default_factory=Default)
 
+    # Specifies how to aggregate the suffix_out tokens in the pi0 model.
+    # If not provided, the default aggregation will be used.
+    aggregation_hori: str = "initial"  # Options: "initial", "final"
+    aggregation_diff: str = "final"  # Options: "initial", "final"
+
 
 # Default checkpoints that should be used for each environment.
 DEFAULT_CHECKPOINT: dict[EnvMode, Checkpoint] = {
@@ -70,8 +83,12 @@ DEFAULT_CHECKPOINT: dict[EnvMode, Checkpoint] = {
         dir="gs://openpi-assets/checkpoints/pi0_fast_droid",
     ),
     EnvMode.LIBERO: Checkpoint(
-        config="pi0_fast_libero",
-        dir="gs://openpi-assets/checkpoints/pi0_fast_libero",
+        config="pi0_libero",
+        dir="gs://openpi-assets/checkpoints/pi0_libero",
+        sample_kwargs={
+            "aggregation_hori": "initial",
+            "aggregation_diff": "final",
+        }
     ),
 }
 
@@ -80,7 +97,7 @@ def create_default_policy(env: EnvMode, *, default_prompt: str | None = None) ->
     """Create a default policy for the given environment."""
     if checkpoint := DEFAULT_CHECKPOINT.get(env):
         return _policy_config.create_trained_policy(
-            _config.get_config(checkpoint.config), checkpoint.dir, default_prompt=default_prompt
+            _config.get_config(checkpoint.config), checkpoint.dir, default_prompt=default_prompt, sample_kwargs=checkpoint.sample_kwargs
         )
     raise ValueError(f"Unsupported environment mode: {env}")
 
@@ -90,7 +107,7 @@ def create_policy(args: Args) -> _policy.Policy:
     match args.policy:
         case Checkpoint():
             return _policy_config.create_trained_policy(
-                _config.get_config(args.policy.config), args.policy.dir, default_prompt=args.default_prompt
+                _config.get_config(args.policy.config), args.policy.dir, default_prompt=args.default_prompt, sample_kwargs=args.policy.sample_kwargs
             )
         case Default():
             return create_default_policy(args.env, default_prompt=args.default_prompt)

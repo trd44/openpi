@@ -29,9 +29,8 @@ services:
         reservations:
           devices:
             - driver: nvidia
-              count: 1
-              # --> FIX: Add 'graphics', 'compute', 'utility' <--
-              capabilities: [gpu, graphics, compute, utility] # Or use [all] for testing
+              count: all
+              capabilities: [gpu, graphics, compute, utility]
 
   openpi_server:
     # ... (Keep the openpi_server definition as is, its capabilities: [gpu] is likely fine) ...
@@ -46,13 +45,22 @@ services:
       - $PWD:/app
       - ${OPENPI_DATA_HOME:-~/.cache/openpi}:/openpi_assets
     environment:
-      - SERVER_ARGS=policy:checkpoint --policy.config pi0_hanoi_fixed --policy.dir /app/checkpoints/pi0_hanoi_fixed/initial_training_fixed3/27000
+      - SERVER_ARGS #=policy:checkpoint --policy.config pi0_hanoi_fixed --policy.dir /app/checkpoints/pi0_hanoi_fixed/initial_training_fixed3/27000
       - OPENPI_DATA_HOME=/openpi_assets
       - IS_DOCKER=true
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+    runtime: nvidia
+    devices:
+      - /dev/nvidiactl:/dev/nvidiactl
+      - /dev/nvidia0:/dev/nvidia0
+      - /dev/nvidia-uvm:/dev/nvidia-uvm
+      - /dev/nvidia-uvm-tools:/dev/nvidia-uvm-tools
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+    # runtime: nvidia

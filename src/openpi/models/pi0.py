@@ -6,7 +6,14 @@ import flax.nnx as nnx
 import flax.nnx.bridge as nnx_bridge
 import jax
 import jax.numpy as jnp
-from typing_extensions import override
+import os
+# Disable JIT for debugging
+os.environ['JAX_DISABLE_JIT'] = '1'
+# Or use JAX config
+jax.config.update('jax_disable_jit', True)
+
+from polars import first
+from typing_extensions import Literal, override
 
 from openpi.models import model as _model
 import openpi.models.gemma as _gemma
@@ -272,6 +279,8 @@ class Pi0(_model.BaseModel):
         observation: _model.Observation,
         *,
         num_steps: int | at.Int[at.Array, ""] = 10,
+        aggregation_hori: Literal["final", "initial"] = 'first',
+        aggregation_diff: Literal["final", "initial"] = 'final',
     ) -> _model.Actions:
         observation = _model.preprocess_observation(None, observation, train=False)
         # note that we use the convention more common in diffusion literature, where t=1 is noise and t=0 is the target
@@ -284,10 +293,10 @@ class Pi0(_model.BaseModel):
         prefix_tokens, prefix_mask, prefix_ar_mask = self.embed_prefix(observation)
         prefix_attn_mask = make_attn_mask(prefix_mask, prefix_ar_mask)
         positions = jnp.cumsum(prefix_mask, axis=1) - 1
-        _, kv_cache = self.PaliGemma.llm([prefix_tokens, None], mask=prefix_attn_mask, positions=positions)
+        (prefix_out, _), kv_cache = self.PaliGemma.llm([prefix_tokens, None], mask=prefix_attn_mask, positions=positions)
 
         def step(carry):
-            x_t, time = carry
+            x_t, time, suffix_out_aggregated = carry
             suffix_tokens, suffix_mask, suffix_ar_mask = self.embed_suffix(
                 observation, x_t, jnp.broadcast_to(time, batch_size)
             )
@@ -312,14 +321,28 @@ class Pi0(_model.BaseModel):
                 [None, suffix_tokens], mask=full_attn_mask, positions=positions, kv_cache=kv_cache
             )
             assert prefix_out is None
-            v_t = self.action_out_proj(suffix_out[:, -self.action_horizon :])
+            suffix_out_final = suffix_out[:, -self.action_horizon :]
+            # aggregate the suffix_out in the way specified by the aggregation argument
+            
+            if aggregation_hori == 'initial': # only record the first action in the horizon
+                suffix_out_aggregated = suffix_out_aggregated[:, 0, :]
+            elif aggregation_hori == 'final': # only record the last action in the horizon
+                suffix_out_aggregated = suffix_out_aggregated[:, -1, :]
+            v_t = self.action_out_proj(suffix_out_final)
 
-            return x_t + dt * v_t, time + dt
+            # return the suffix_out collected so far and the next time step
+            return x_t + dt * v_t, time + dt, suffix_out_aggregated
 
         def cond(carry):
-            x_t, time = carry
+            x_t, time, suffix_out_aggregated = carry
             # robust to floating-point error
             return time >= -dt / 2
+        # run step to obtain the initial suffix_out_aggregated
+        if aggregation_diff == 'initial':
+            _, _, suffix_out_aggregated = step((noise, 1.0, None))
+        x_0, time, suffix_out_aggregated = jax.lax.while_loop(cond, step, (noise, 1.0, None))
+        if aggregation_diff == 'final':
+            # run the step to get the final suffix_out_aggregated
+            _, _, suffix_out_aggregated = step((x_0, time, suffix_out_aggregated))
 
-        x_0, _ = jax.lax.while_loop(cond, step, (noise, 1.0))
-        return x_0
+        return {'actions': x_0, 'prefix_out': prefix_out, 'suffix_out_aggregated': suffix_out_aggregated}

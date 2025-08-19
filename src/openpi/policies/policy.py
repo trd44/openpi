@@ -31,7 +31,9 @@ class Policy(BasePolicy):
         sample_kwargs: dict[str, Any] | None = None,
         metadata: dict[str, Any] | None = None,
     ):
-        self._sample_actions = nnx_utils.module_jit(model.sample_actions)
+        self.model = model
+        #self._sample_actions = nnx_utils.module_jit(model.sample_actions)
+        self._sample_actions = model.sample_actions
         self._input_transform = _transforms.compose(transforms)
         self._output_transform = _transforms.compose(output_transforms)
         self._rng = rng or jax.random.key(0)
@@ -50,10 +52,14 @@ class Policy(BasePolicy):
         self._rng, sample_rng = jax.random.split(self._rng)
         outputs = {
             "state": inputs["state"],
+            # _sample_action returns a sequence of actions and a dict of aux outputs
             "actions": self._sample_actions(sample_rng, _model.Observation.from_dict(inputs), **self._sample_kwargs),
         }
-        # Unbatch and convert to np.ndarray.        # Unbatch and convert to np.ndarray.
-        outputs = jax.tree.map(lambda x: np.asarray(x[0, ...]), outputs)
+        # check if model is a Pi0 model and unbatch and convert to np.ndarray.
+        if isinstance(self.model, _model.Pi0Model):
+            outputs = jax.tree.map(lambda d: np.asarray(d['actions'][0, ...]), outputs) 
+        else:
+            outputs = jax.tree.map(lambda x: np.asarray(x[0, ...]), outputs)
         model_time = time.monotonic() - start_time
 
         outputs = self._output_transform(outputs)

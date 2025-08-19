@@ -58,15 +58,15 @@ datasets: /app/third_party/libero/libero/datasets
 assets: /app/third_party/libero/libero/libero/assets
 EOF
 
-# CMD ["/bin/bash", "-c", "source /.venv/bin/activate && python examples/libero/main.py"]
-# CMD ["/bin/bash", "-c", "source /.venv/bin/activate && python examples/libero/choose_task.py"]
-CMD ["/bin/bash", "-c", \
-    "source /.venv/bin/activate && \
-    echo 'Installing custom Robosuite source from /robosuite_source...' && \
-    uv pip install --no-cache-dir -e /robosuite_source && \
-    echo 'Installing robosuite_task_zoo dependency...' && \
-    uv pip install --no-cache-dir -e /robosuite_task_zoo_source && \
-    echo 'Custom Robosuite installed.' && \
-    uv pip install wandb && \
-    cd /app && \
-    python examples/libero/main_rs.py"]
+#CMD ["/bin/bash", "-c", "source /.venv/bin/activate && python examples/libero/main.py"]
+CMD ["/bin/bash", "-c", "source /.venv/bin/activate && python examples/libero/choose_task.py"]
+# CMD ["/bin/bash", "-c", \
+#     "source /.venv/bin/activate && \
+#     echo 'Installing custom Robosuite source from /robosuite_source...' && \
+#     uv pip install --no-cache-dir -e /robosuite_source && \
+#     echo 'Installing robosuite_task_zoo dependency...' && \
+#     uv pip install --no-cache-dir -e /robosuite_task_zoo_source && \
+#     echo 'Custom Robosuite installed.' && \
+#     uv pip install wandb && \
+#     cd /app && \
+#     python examples/libero/main_rs.py"]

@@ -39,7 +39,7 @@ TARGET_TASK_SUITE_NAME = "libero_10"
 # for i, task_obj in enumerate(task_suite_obj.tasks):
 #     print(f"  ID: {i}, Name: {task_obj.name}, Description: {task_obj.language}")
 # """
-TARGET_TASK_ID = 1 # Index of the task within the TARGET_TASK_SUITE_NAME (e.g., 0 for the first task)
+TARGET_TASK_ID = 3 # Index of the task within the TARGET_TASK_SUITE_NAME (e.g., 0 for the first task)
 
 # How many different initial states (trials) of this specific task to attempt.
 # If NUM_TRIALS_FOR_SELECTED_TASK is more than available initial states for the task,
@@ -52,7 +52,7 @@ NUM_STEPS_WAIT = 10  # Number of steps to wait for objects to stabilize in sim a
 
 # Output and Reproducibility
 VIDEO_OUT_PATH = "data/libero/videos/single_task_runs"  # Path to save videos
-SEED = 0  # Random Seed (for reproducibility)
+SEED = 7  # Random Seed (for reproducibility)
 # --- End User Configuration ---
 
 
