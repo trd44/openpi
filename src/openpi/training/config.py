@@ -278,6 +278,8 @@ class LeRobotLiberoDataConfig(DataConfigFactory):
                         "observation/wrist_image": "wrist_image",
                         "observation/state": "state",
                         "actions": "actions",
+                        #"prefix_out": "prefix_out", # added output for probing
+                        #"suffix_out": "suffix_out", # added output for probing
                         "prompt": "prompt",
                     }
                 )

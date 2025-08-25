@@ -64,8 +64,8 @@ class Args:
 
     # Specifies how to aggregate the suffix_out tokens in the pi0 model.
     # If not provided, the default aggregation will be used.
-    aggregation_hori: str = "initial"  # Options: "initial", "final"
-    aggregation_diff: str = "final"  # Options: "initial", "final"
+    aggregation_hori_initial: int = 1  # Options: 0, 1
+    aggregation_diff_initial: int = 0  # Options: 0, 1
 
 
 # Default checkpoints that should be used for each environment.
@@ -86,8 +86,8 @@ DEFAULT_CHECKPOINT: dict[EnvMode, Checkpoint] = {
         config="pi0_libero",
         dir="gs://openpi-assets/checkpoints/pi0_libero",
         sample_kwargs={
-            "aggregation_hori": "initial",
-            "aggregation_diff": "final",
+            "aggregation_hori_initial": 1,  # Use initial aggregation for the first action in the horizon
+            "aggregation_diff_initial": 0,  # Use final aggregation for the last action in the horizon
         }
     ),
 }

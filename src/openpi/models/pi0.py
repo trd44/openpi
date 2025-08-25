@@ -8,9 +8,9 @@ import jax
 import jax.numpy as jnp
 import os
 # Disable JIT for debugging
-os.environ['JAX_DISABLE_JIT'] = '1'
+os.environ['JAX_DISABLE_JIT'] = '0'
 # Or use JAX config
-jax.config.update('jax_disable_jit', True)
+jax.config.update('jax_disable_jit', False)
 
 from polars import first
 from typing_extensions import Literal, override
@@ -279,8 +279,8 @@ class Pi0(_model.BaseModel):
         observation: _model.Observation,
         *,
         num_steps: int | at.Int[at.Array, ""] = 10,
-        aggregation_hori: Literal["final", "initial"] = 'first',
-        aggregation_diff: Literal["final", "initial"] = 'final',
+        aggregation_hori_initial: int | at.Int[at.Array, ""] = 1,
+        aggregation_diff_initial: int | at.Int[at.Array, ""] = 0,
     ) -> _model.Actions:
         observation = _model.preprocess_observation(None, observation, train=False)
         # note that we use the convention more common in diffusion literature, where t=1 is noise and t=0 is the target
@@ -296,7 +296,11 @@ class Pi0(_model.BaseModel):
         (prefix_out, _), kv_cache = self.PaliGemma.llm([prefix_tokens, None], mask=prefix_attn_mask, positions=positions)
 
         def step(carry):
-            x_t, time, suffix_out_aggregated = carry
+            def aggregate_hori_get_initial(suffix_out):
+                return suffix_out[:, -self.action_horizon :][:, 0, :]
+            def aggregate_hori_get_final(suffix_out):
+                return suffix_out[:, -self.action_horizon :][:, -1, :]
+            x_t, time, suffix_out_aggregated, track_suffix = carry
             suffix_tokens, suffix_mask, suffix_ar_mask = self.embed_suffix(
                 observation, x_t, jnp.broadcast_to(time, batch_size)
             )
@@ -321,28 +325,45 @@ class Pi0(_model.BaseModel):
                 [None, suffix_tokens], mask=full_attn_mask, positions=positions, kv_cache=kv_cache
             )
             assert prefix_out is None
-            suffix_out_final = suffix_out[:, -self.action_horizon :]
-            # aggregate the suffix_out in the way specified by the aggregation argument
-            
-            if aggregation_hori == 'initial': # only record the first action in the horizon
-                suffix_out_aggregated = suffix_out_aggregated[:, 0, :]
-            elif aggregation_hori == 'final': # only record the last action in the horizon
-                suffix_out_aggregated = suffix_out_aggregated[:, -1, :]
-            v_t = self.action_out_proj(suffix_out_final)
+
+            suffix_out_aggregated = jax.lax.cond(
+                track_suffix,
+                lambda: jax.lax.cond(
+                    aggregation_hori_initial == 1,
+                    lambda: aggregate_hori_get_initial(suffix_out),
+                    lambda: aggregate_hori_get_final(suffix_out)
+                ),
+                # if not tracking suffix, return the aggregated suffix_out as empty array the same size as the suffix_out
+                lambda: jnp.zeros_like(suffix_out[:, 0, :], dtype=suffix_out.dtype)
+            )
+            v_t = self.action_out_proj(suffix_out[:, -self.action_horizon :])
 
             # return the suffix_out collected so far and the next time step
-            return x_t + dt * v_t, time + dt, suffix_out_aggregated
+            return x_t + dt * v_t, time + dt, suffix_out_aggregated, track_suffix
 
         def cond(carry):
-            x_t, time, suffix_out_aggregated = carry
-            # robust to floating-point error
+            x_t, time, suffix_out_aggregated, track_suffix = carry
+            # robust to floating-point error. Stop when there's one more step to go.
             return time >= -dt / 2
-        # run step to obtain the initial suffix_out_aggregated
-        if aggregation_diff == 'initial':
-            _, _, suffix_out_aggregated = step((noise, 1.0, None))
-        x_0, time, suffix_out_aggregated = jax.lax.while_loop(cond, step, (noise, 1.0, None))
-        if aggregation_diff == 'final':
-            # run the step to get the final suffix_out_aggregated
-            _, _, suffix_out_aggregated = step((x_0, time, suffix_out_aggregated))
+        
+        # create a dummy suffix_out_aggregated to pass to the step function
+        dummy_suffix_out_aggregated = jnp.zeros((batch_size, self.action_out_proj.in_features), dtype=prefix_out.dtype)
 
-        return {'actions': x_0, 'prefix_out': prefix_out, 'suffix_out_aggregated': suffix_out_aggregated}
+        # Use JAX conditional instead of Python if
+        def run_initial_step():
+            _, time, suffix_out_aggregated, _ = step((noise, 1.0, dummy_suffix_out_aggregated, True))
+            x_0, _, _, _ = jax.lax.while_loop(cond, step, (noise, time, dummy_suffix_out_aggregated, False))
+            return x_0, suffix_out_aggregated
+        
+        def run_final_step():
+            x_0, _, suffix_out_aggregated, _ = jax.lax.while_loop(cond, step, (noise, 1.0, dummy_suffix_out_aggregated, True))
+            return x_0, suffix_out_aggregated
+        
+        x_0, suffix_out_aggregated = jax.lax.cond(
+            aggregation_diff_initial == 1,
+            run_initial_step,
+            run_final_step
+        )
+
+        # cast prefix_out and suffix_out_aggregated to the dtype of 'actions'
+        return {'actions': x_0, 'prefix_out': prefix_out.astype(x_0.dtype), 'suffix_out_aggregated': suffix_out_aggregated.astype(x_0.dtype)}
