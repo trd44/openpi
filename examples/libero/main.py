@@ -8,7 +8,7 @@ import imageio
 from libero.libero import benchmark
 from libero.libero import get_libero_path
 from libero.libero.envs import OffScreenRenderEnv
-from libero.detection.libero_10_subgoal_detector import Libero10SubgoalDetector
+from detection.libero_10_subgoal_detector import Libero10SubgoalDetector
 import numpy as np
 from openpi_client import image_tools
 from openpi_client import websocket_client_policy as _websocket_client_policy
@@ -37,7 +37,6 @@ class Args:
     )
     num_steps_wait: int = 10  # Number of steps to wait for objects to stabilize i n sim
     num_trials_per_task: int = 50  # Number of rollouts per task
-
     #################################################################################################################
     # Utils
     #################################################################################################################
@@ -84,7 +83,7 @@ def eval_libero(args: Args) -> None:
 
         # Initialize LIBERO environment and task description
         env, task_description = _get_libero_env(task, LIBERO_ENV_RESOLUTION, args.seed)
-
+        subgoal_detector = Libero10SubgoalDetector(env=env)
         # Start episodes
         task_episodes, task_successes = 0, 0
         for episode_idx in tqdm.tqdm(range(args.num_trials_per_task)):
@@ -110,7 +109,9 @@ def eval_libero(args: Args) -> None:
                         obs, reward, done, info = env.step(LIBERO_DUMMY_ACTION)
                         t += 1
                         continue
-
+                    subgoal_successes = subgoal_detector.detect_subgoal_successes()
+                    # subgoal_successes is a dictionary with values 0 or 1 for each subgoal. Turn it into a binary array
+                    subgoal_bits = np.array(list(subgoal_successes.values()), dtype=np.float32)
                     # Get preprocessed image
                     # IMPORTANT: rotate 180 degrees to match train preprocessing
                     img = np.ascontiguousarray(obs["agentview_image"][::-1, ::-1])
@@ -126,7 +127,7 @@ def eval_libero(args: Args) -> None:
                     replay_images.append(img)
 
                     if not action_plan:
-                        # Finished executing previous action chunk -- compute new chunk
+                        # Finished executing previous action chunk or configured to infer at every timestep -- compute new chunk
                         # Prepare observations dict
                         element = {
                             "observation/image": img,
@@ -138,6 +139,9 @@ def eval_libero(args: Args) -> None:
                                     obs["robot0_gripper_qpos"],
                                 )
                             ),
+                            "observation/subgoal_succeses": subgoal_bits,
+                            "timestep": t,
+                            "episode_idx": episode_idx,
                             "prompt": str(task_description),
                         }
 
