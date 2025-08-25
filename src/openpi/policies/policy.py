@@ -35,8 +35,8 @@ class Policy(BasePolicy):
         metadata: dict[str, Any] | None = None,
     ):
         self.model = model
-        #self._sample_actions = nnx_utils.module_jit(model.sample_actions)
-        self._sample_actions = model.sample_actions
+        self._sample_actions = nnx_utils.module_jit(model.sample_actions)
+        #self._sample_actions = model.sample_actions
         self._input_transform = _transforms.compose(transforms)
         self._output_transform = _transforms.compose(output_transforms)
         self._rng = rng or jax.random.key(0)
@@ -104,8 +104,13 @@ class PolicyRecorder(_base_policy.BasePolicy):
 
         data = {"inputs": obs, "outputs": results}
         data = flax.traverse_util.flatten_dict(data, sep="/")
-
-        output_path = self._record_dir / f"step_{self._record_step}"
+        prompt = obs['prompt'] if 'prompt' in obs else 'no_prompt'
+        episode_idx = obs['episode_idx'] if 'episode_idx' in obs else 0
+        step = obs['timestep'] if 'timestep' in obs else self._record_step
+        output_path = self._record_dir / prompt.replace(" ", "_") / f"episode_{episode_idx}" / f"step_{step}"
+        # make sure the directory exists
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path = output_path.with_suffix(".npy")
         self._record_step += 1
 
         np.save(output_path, np.asarray(data))
