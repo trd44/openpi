@@ -107,7 +107,8 @@ class PolicyRecorder(_base_policy.BasePolicy):
         prompt = obs['prompt'] if 'prompt' in obs else 'no_prompt'
         episode_idx = obs['episode_idx'] if 'episode_idx' in obs else 0
         step = obs['timestep'] if 'timestep' in obs else self._record_step
-        output_path = self._record_dir / prompt.replace(" ", "_") / f"episode_{episode_idx}" / f"step_{step}"
+        success = obs['observation/goal_success'] if 'observation/goal_success' in obs else None
+        output_path = self._record_dir / prompt.replace(" ", "_") / f"episode_{episode_idx}" / f"step_{step}_success={success}"
         # make sure the directory exists
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path = output_path.with_suffix(".npy")

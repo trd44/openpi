@@ -72,6 +72,33 @@ def eval_libero(args: Args) -> None:
 
     client = _websocket_client_policy.WebsocketClientPolicy(args.host, args.port)
 
+    def construct_element(obs, done, subgoal_bits, t, episode_idx, task_description):
+        # Get preprocessed image
+        # IMPORTANT: rotate 180 degrees to match train preprocessing
+        img = np.ascontiguousarray(obs["agentview_image"][::-1, ::-1])
+        wrist_img = np.ascontiguousarray(obs["robot0_eye_in_hand_image"][::-1, ::-1])
+        img = image_tools.convert_to_uint8(
+            image_tools.resize_with_pad(img, args.resize_size, args.resize_size)
+        )
+        wrist_img = image_tools.convert_to_uint8(
+            image_tools.resize_with_pad(wrist_img, args.resize_size, args.resize_size)
+        )
+
+        # Prepare observations dict
+        element = {
+            "observation/image": img,
+            "observation/wrist_image": wrist_img,
+            "observation/state": np.concatenate(
+                (obs["robot0_eef_pos"], _quat2axisangle(obs["robot0_eef_quat"]), obs["robot0_gripper_qpos"])
+            ),
+            "observation/subgoal_successes": subgoal_bits,
+            "observation/goal_success": done,
+            "timestep": t,
+            "episode_idx": episode_idx,
+            "prompt": str(task_description),
+        }
+        return element
+
     # Start evaluation
     total_episodes, total_successes = 0, 0
     for task_id in tqdm.tqdm(range(num_tasks_in_suite)):
@@ -112,39 +139,14 @@ def eval_libero(args: Args) -> None:
                     subgoal_successes = subgoal_detector.detect_subgoal_successes()
                     # subgoal_successes is a dictionary with values 0 or 1 for each subgoal. Turn it into a binary array
                     subgoal_bits = np.array(list(subgoal_successes.values()), dtype=np.float32)
-                    # Get preprocessed image
-                    # IMPORTANT: rotate 180 degrees to match train preprocessing
-                    img = np.ascontiguousarray(obs["agentview_image"][::-1, ::-1])
-                    wrist_img = np.ascontiguousarray(obs["robot0_eye_in_hand_image"][::-1, ::-1])
-                    img = image_tools.convert_to_uint8(
-                        image_tools.resize_with_pad(img, args.resize_size, args.resize_size)
-                    )
-                    wrist_img = image_tools.convert_to_uint8(
-                        image_tools.resize_with_pad(wrist_img, args.resize_size, args.resize_size)
-                    )
-
+                    
+                    element = construct_element(obs, done, subgoal_bits, t, episode_idx, task_description)
                     # Save preprocessed image for replay video
+                    img = element["observation/image"]
                     replay_images.append(img)
 
                     if not action_plan:
-                        # Finished executing previous action chunk or configured to infer at every timestep -- compute new chunk
-                        # Prepare observations dict
-                        element = {
-                            "observation/image": img,
-                            "observation/wrist_image": wrist_img,
-                            "observation/state": np.concatenate(
-                                (
-                                    obs["robot0_eef_pos"],
-                                    _quat2axisangle(obs["robot0_eef_quat"]),
-                                    obs["robot0_gripper_qpos"],
-                                )
-                            ),
-                            "observation/subgoal_succeses": subgoal_bits,
-                            "timestep": t,
-                            "episode_idx": episode_idx,
-                            "prompt": str(task_description),
-                        }
-
+                        # Finished executing previous action chunk -- compute new chunk
                         # Query model to get action
                         action_chunk = client.infer(element)["actions"]
                         assert (
@@ -171,6 +173,10 @@ def eval_libero(args: Args) -> None:
 
             # Save a replay video of the episode
             suffix = "success" if done else "failure"
+            # Infer one last time to save the final state and task success for PolicyRecorder
+            element = construct_element(obs, done, subgoal_bits, t, episode_idx, task_description)
+            replay_images.append(element["observation/image"])
+            client.infer(element)
             task_segment = task_description.replace(" ", "_")
             # make sure directory exists
             pathlib.Path(args.video_out_path, task_segment).mkdir(parents=True, exist_ok=True)
