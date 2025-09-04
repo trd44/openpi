@@ -118,6 +118,38 @@ class PandaHanoiDetector(_BaseHanoiDetector):
         # print(f"  PandaHanoiDetector.over('{gripper_pddl_name}', '{obj_pddl_name}'): dist_xy={dist_xy:.4f}, thresh={OVER_THRESHOLD}, met={is_condition_met}")
         return is_condition_met
 
+    def on(self, obj1, obj2):
+        """Check if obj1 is on top of obj2 (either another cube or a peg)."""
+        try:
+            # Get obj1 position
+            obj1_body_name = self.object_id.get(obj1)
+            if not obj1_body_name:
+                return False
+            obj1_body_id = self.env.sim.model.body_name2id(obj1_body_name)
+            obj1_pos = self.env.sim.data.body_xpos[obj1_body_id]
+            
+            # Get obj2 position
+            if obj2 in self.peg_target_positions:
+                # obj2 is a peg, use predefined position
+                obj2_pos = self.peg_target_positions[obj2]
+            else:
+                # obj2 is another cube
+                obj2_body_name = self.object_id.get(obj2)
+                if not obj2_body_name:
+                    return False
+                obj2_body_id = self.env.sim.model.body_name2id(obj2_body_name)
+                obj2_pos = self.env.sim.data.body_xpos[obj2_body_id]
+            
+            # Check if obj1 is on top of obj2
+            dist_xy = np.linalg.norm(obj1_pos[:2] - obj2_pos[:2])
+            dist_z = obj1_pos[2] - obj2_pos[2]
+            
+            # obj1 should be above obj2 and close in XY
+            return bool(dist_xy < 0.03 and dist_z > 0.001 and dist_z < 0.055)
+            
+        except (ValueError, KeyError):
+            return False
+
     def get_groundings(self, as_dict=False, binary_to_float=False, return_distance=False):
         # Start with groundings from the base class, if it provides any useful ones
         # Or initialize an empty dict if _BaseHanoiDetector.get_groundings is not suitable/available
@@ -151,12 +183,14 @@ class PandaHanoiDetector(_BaseHanoiDetector):
         if not return_distance and binary_to_float: val = float(val)
         groundings[f'open_gripper({pddl_gripper})'] = val # Or just open() or handempty()
 
-        # Add other predicates like on(cube,peg), on(cube,cube), clear(cube/peg) if needed
-        # For 'on(objA, objB)' (objA is on objB):
-        #   Need to check XY alignment and Z height (objA_bottom_z approx objB_top_z)
-        #   dist_xy < threshold_xy AND abs(objA_z - (objB_z + objB_height/2 + objA_height/2)) < threshold_z
-        # For 'clear(objB)':
-        #   No other object objA is on(objA, objB)
+        # On predicates - check if objects are placed on pegs or stacked on other objects
+        all_placement_targets = self.pegs_pddl_names + self.objects  # Pegs + Cubes (for stacking)
+        for obj_name in all_manipulable_objects:
+            for target_name in all_placement_targets:
+                if obj_name != target_name:  # Don't check if object is on itself
+                    val = self.on(obj_name, target_name)
+                    if not return_distance and binary_to_float: val = float(val)
+                    groundings[f'on({obj_name},{target_name})'] = val
 
         # Ensure all keys are strings if converting to array later
         groundings = {str(k): v for k, v in groundings.items()}
