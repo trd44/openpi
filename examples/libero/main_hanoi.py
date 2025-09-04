@@ -27,7 +27,7 @@ from hanoi_detectors import PandaHanoiDetector
 # Constants and Configuration
 # --------------------------------------------------------------------------------------
 # Task configuration
-COLOR2OBJ = {"blue": "cube1", "red": "cube2", "green": "cube3"}
+COLOR2OBJ = {"blue": "cube1", "red": "cube2", "green": "cube3", "yellow": "cube4"}
 AREA2PEG = {"left": "peg1", "middle": "peg2", "right": "peg3"}
 
 # --------------------------------------------------------------------------------------
@@ -135,7 +135,7 @@ def build_task_sequence_g(
 
     return [
         # 1  Pick blue
-        {"prompt": "Pick up the blue block.",
+        {"prompt": "Pick the blue block.",
          "done": lambda: bool(g().get("grasped(cube1)", False)) and det_simple.lifted("blue")},
 
         # 2  Place blue on right peg
@@ -143,7 +143,7 @@ def build_task_sequence_g(
          "done": lambda: bool(g().get("on(cube1,peg3)", False))},
 
         # 3  Pick red
-        {"prompt": "Pick up the red block.",
+        {"prompt": "Pick the red block.",
          "done": lambda: bool(g().get("grasped(cube2)", False)) and det_simple.lifted("red")},
 
         # 4  Place red on middle peg
@@ -151,7 +151,7 @@ def build_task_sequence_g(
          "done": lambda: bool(g().get("on(cube2,peg2)", False))},
 
         # 5  Pick blue
-        {"prompt": "Pick up the blue block.",
+        {"prompt": "Pick the blue block.",
          "done": lambda: bool(g().get("grasped(cube1)", False)) and det_simple.lifted("blue")},
 
         # 6  Stack blue on red
@@ -159,7 +159,7 @@ def build_task_sequence_g(
          "done": lambda: bool(g().get("on(cube1,cube2)", False))},
 
         # 7  Pick green
-        {"prompt": "Pick up the green block.",
+        {"prompt": "Pick the green block.",
          "done": lambda: bool(g().get("grasped(cube3)", False)) and det_simple.lifted("green")},
 
         # 8  Place green on right peg
@@ -167,7 +167,7 @@ def build_task_sequence_g(
          "done": lambda: bool(g().get("on(cube3,peg3)", False))},
 
         # 9
-        {"prompt": "Pick up the blue block.",
+        {"prompt": "Pick the blue block.",
          "done": lambda: bool(g().get("grasped(cube1)", False)) and det_simple.lifted("blue")},
 
         # 10  Move blue to left peg
@@ -175,7 +175,7 @@ def build_task_sequence_g(
          "done": lambda: bool(g().get("on(cube1,peg1)", False))},
 
         # 11  Pick red
-        {"prompt": "Pick up the red block.",
+        {"prompt": "Pick the red block.",
          "done": lambda: bool(g().get("grasped(cube2)", False)) and det_simple.lifted("red")},
 
         # 12  Stack red on green
@@ -183,7 +183,7 @@ def build_task_sequence_g(
          "done": lambda: bool(g().get("on(cube2,cube3)", False))},
 
         # 13
-        {"prompt": "Pick up the blue block.",
+        {"prompt": "Pick the blue block.",
          "done": lambda: bool(g().get("grasped(cube1)", False)) and det_simple.lifted("blue")},
 
         # 14  Stack blue on red
@@ -205,13 +205,15 @@ class Args:
     # --- Policy Interaction ---
     resize_size: int = 224           # Target size for image resizing (must match model training)
     replan_steps: int = 50           # Number of steps per action chunk from policy server
-    use_sequential_tasks: bool = False # If True, use sequential task prompts from build_task_sequence_g; if False, use single prompt "Play Towers of Hanoi."
+    use_sequential_tasks: bool = True # If True, use sequential task prompts from build_task_sequence_g; if False, use single prompt "Play Towers of Hanoi."
+    time_based_progression: bool = False # If True, advance to next task after task_timeout steps regardless of completion
+    task_timeout: int = 500          # Number of steps to wait before timing out a task (only used if time_based_progression=True)
 
     # --- Robosuite Environment ---
     env_name: str = "Hanoi" 
     robots: str = "Panda"           # Robot model to use
     controller: str = "OSC_POSE"    # Robosuite controller name
-    horizon: int = 2550             # Max steps per episode
+    horizon: int = 10050             # Max steps per episode
     skip_steps: int = 50            # Number of initial steps to skip (e.g., wait for objects to settle)
 
     # --- Rendering & Video ---
@@ -228,10 +230,10 @@ class Args:
 
     # --- Misc ---
     seed: int = 3           #: Random seed
-    episodes: int = 1      #: How many episodes to run back-to-back
+    episodes: int = 10      #: How many episodes to run back-to-back
 
     # --- Logging ---
-    wandb_project: str = "TEST hanoi_openpi_one_task" #: W&B project name
+    wandb_project: str = "TEST hanoi 300 subtasks" #: W&B project name
     log_every_n_seconds: float = 0.5 #: Logging interval for W&B settings
     
     def generate_video_filename(self, episode: int) -> str:
@@ -335,7 +337,8 @@ class HanoiEnvironment:
             render_camera="agentview" if has_renderer else None,
             ignore_done=True,  # Let horizon end the episode
             hard_reset=False,  # Faster resets can sometimes be unstable, switch if needed
-            random_reset=False
+            random_block_placement=False,
+            random_block_selection=True,
         )
         
         # Seed environment
@@ -380,14 +383,18 @@ class HanoiEnvironment:
 class TaskManager:
     """Manages task progression and completion tracking."""
     
-    def __init__(self, tasks: List[Dict[str, Any]], use_sequential_tasks: bool = False):
+    def __init__(self, tasks: List[Dict[str, Any]], use_sequential_tasks: bool = False, 
+                 time_based_progression: bool = False, task_timeout: int = 200):
         self.tasks = tasks
         self.use_sequential_tasks = use_sequential_tasks
+        self.time_based_progression = time_based_progression
+        self.task_timeout = task_timeout
         self.current_task_idx = 0
         self.current_prompt = tasks[0]["prompt"] if tasks and use_sequential_tasks else "Play Towers of Hanoi."
         self.task_totals = [0] * len(self.tasks) if tasks else []
         self.episode_score = 0
         self.task_completed_this_episode = [False] * len(self.tasks) if tasks else []
+        self.task_start_step = 0  # Track when current task started
         
     def reset_episode(self):
         """Reset episode-specific counters."""
@@ -398,7 +405,48 @@ class TaskManager:
             self.current_task_idx = 0
             self.current_prompt = self.tasks[0]["prompt"] if self.tasks else ""
         self.episode_score = 0
+        self.task_start_step = 0
         
+    def check_task_timeout(self, step: int) -> bool:
+        """Check if current task has timed out and either advance or terminate based on mode."""
+        if not self.tasks:
+            return False
+        
+        if self.current_task_idx >= len(self.tasks):
+            return False
+        
+        # Check if we've exceeded the timeout for the current task
+        steps_on_current_task = step - self.task_start_step
+        if steps_on_current_task >= self.task_timeout:
+            if self.time_based_progression:
+                # In time-based progression mode, advance to next task
+                logging.info(f"⏰ Task {self.current_task_idx + 1}/{len(self.tasks)} timed out after {steps_on_current_task} steps: {self.tasks[self.current_task_idx]['prompt']}")
+                
+                # Advance to next task
+                self.current_task_idx += 1
+                if self.current_task_idx >= len(self.tasks):
+                    logging.info("🎉 All tasks completed (via timeout) – ending episode early.")
+                    return True
+                    
+                if self.use_sequential_tasks:
+                    # In sequential mode, change the prompt
+                    self.current_prompt = self.tasks[self.current_task_idx]["prompt"]
+                    logging.info(f"⏭️ Starting next task {self.current_task_idx + 1}/{len(self.tasks)}: {self.current_prompt}")
+                else:
+                    # In single prompt mode, keep the same prompt but log task progression
+                    logging.info(f"📊 Task {self.current_task_idx} timed out in single prompt mode - continuing with same prompt")
+                
+                # Reset task start step for the new task
+                self.task_start_step = step
+                return True
+            else:
+                # In completion-only mode, terminate the episode early
+                logging.info(f"⏰ Task {self.current_task_idx + 1}/{len(self.tasks)} timed out after {steps_on_current_task} steps: {self.tasks[self.current_task_idx]['prompt']}")
+                logging.info("🛑 Episode terminated early due to task timeout (time_based_progression=False)")
+                return True
+        
+        return False
+
     def check_task_completion(self, step: int) -> bool:
         """Check if current task is completed and advance if so."""
         if not self.tasks:
@@ -432,6 +480,8 @@ class TaskManager:
                 # In single prompt mode, keep the same prompt but log task progression
                 logging.info(f"📊 Task {self.current_task_idx} completed in single prompt mode - continuing with same prompt")
             
+            # Reset task start step for the new task
+            self.task_start_step = step
             task_completed = True
             
         return task_completed
@@ -540,15 +590,21 @@ def run_robosuite_with_openpi(args: Args) -> None:
     env_manager.setup()
     
     # Setup task manager
-    task_manager = TaskManager(env_manager.tasks, args.use_sequential_tasks)
+    task_manager = TaskManager(env_manager.tasks, args.use_sequential_tasks, 
+                              args.time_based_progression, args.task_timeout)
     
     # Log the mode being used
     if args.use_sequential_tasks:
         logging.info(f"Running in SEQUENTIAL TASK MODE with {len(env_manager.tasks)} tasks")
-        logging.info("Tasks will progress automatically as goals are achieved")
+        if args.time_based_progression:
+            logging.info(f"Tasks will progress automatically as goals are achieved OR after {args.task_timeout} steps timeout")
+        else:
+            logging.info(f"Tasks will progress automatically as goals are achieved, but episode will terminate early if any task takes longer than {args.task_timeout} steps")
     else:
         logging.info("Running in SINGLE PROMPT MODE")
         logging.info("Using fixed prompt: 'Play Towers of Hanoi.' for all steps")
+        if not args.time_based_progression:
+            logging.info(f"Episode will terminate early if any task takes longer than {args.task_timeout} steps")
     
     # Setup observation preprocessor
     obs_preprocessor = ObservationPreprocessor(args.resize_size)
@@ -709,6 +765,22 @@ def run_robosuite_with_openpi(args: Args) -> None:
                 
                 if task_manager.is_episode_complete():
                     break
+            
+            # Check task timeout (always check, behavior depends on time_based_progression setting)
+            if task_manager.check_task_timeout(t):
+                # Log task timeout
+                wandb.log(
+                    {f"task_{task_manager.current_task_idx}_timeout_step": t},
+                    step=global_step,
+                )
+                wandb_run.summary[f"task{task_manager.current_task_idx}_timeout_step"] = t
+                
+                # Clear action plan to force replanning (only in sequential mode)
+                if task_manager.use_sequential_tasks:
+                    action_plan.clear()
+                
+                # Always break on timeout - either episode complete or early termination
+                break
             
             # Update score
             wandb.log({"score": task_manager.episode_score}, step=global_step)
