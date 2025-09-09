@@ -248,11 +248,11 @@ def visualize_episode_tsne(episode_data_tsne, episode_labels, title="t-SNE of Ep
     # Create colorbar with proper ticks
     # if the ticks are too many, set the number of ticks to 10
     if np.max(episode_labels) > 10:
-        cbar = plt.colorbar(ticks=np.linspace(0, np.max(episode_labels), num=10, dtype=int))
-        cbar.ax.set_yticklabels([str(i) for i in np.linspace(0, np.max(episode_labels), num=10, dtype=int)])
+        cbar = plt.colorbar(ticks=np.linspace(np.min(episode_labels), np.max(episode_labels), num=10, dtype=int))
+        cbar.ax.set_yticklabels([str(i) for i in np.linspace(np.min(episode_labels), np.max(episode_labels), num=10, dtype=int)])
     else:
-        cbar = plt.colorbar(ticks=np.arange(np.max(episode_labels)+1))
-        cbar.ax.set_yticklabels([str(i) for i in range(np.max(episode_labels)+1)])
+        cbar = plt.colorbar(ticks=np.arange(np.min(episode_labels), np.max(episode_labels)+1))
+        cbar.ax.set_yticklabels([str(i) for i in range(np.min(episode_labels), np.max(episode_labels)+1)])
     cbar.set_label(cbar_label)
 
     plt.title(title)
@@ -284,20 +284,20 @@ def visualize_success_vs_failed_episode_tsne(success_tsne, success_labels, faile
     # if the ticks are too many, set the number of ticks to 10
     if np.max(success_labels) > 10:
         cbar = plt.colorbar(ticks=np.linspace(0, np.max(success_labels), num=10, dtype=int))
-        cbar.ax.set_yticklabels([str(i) for i in np.linspace(0, np.max(success_labels), num=10, dtype=int)])
+        cbar.ax.set_yticklabels([str(i) for i in np.linspace(np.min(success_labels), np.max(success_labels), num=10, dtype=int)])
     else:
-        cbar = plt.colorbar(ticks=np.arange(np.max(success_labels)+1))
-        cbar.ax.set_yticklabels([str(i) for i in range(np.max(success_labels)+1)])
+        cbar = plt.colorbar(ticks=np.arange(np.min(success_labels), np.max(success_labels)+1))
+        cbar.ax.set_yticklabels([str(i) for i in range(np.min(success_labels), np.max(success_labels)+1)])
     cbar.set_label(cbar_label1)
     plt.scatter(failed_tsne[:, 0], failed_tsne[:, 1], c=failed_labels, cmap=cmap2, alpha=0.7, label='Failure', marker='x')
     # set a separate colorbar for the failed points
     # if the ticks are too many, set the number of ticks to 10
     if np.max(failed_labels) > 10:
-        cbar = plt.colorbar(ticks=np.linspace(0, np.max(failed_labels), num=10, dtype=int))
-        cbar.ax.set_yticklabels([str(i) for i in np.linspace(0, np.max(failed_labels), num=10, dtype=int)])
+        cbar = plt.colorbar(ticks=np.linspace(np.min(failed_labels), np.max(failed_labels), num=10, dtype=int))
+        cbar.ax.set_yticklabels([str(i) for i in np.linspace(np.min(failed_labels), np.max(failed_labels), num=10, dtype=int)])
     else:
-        cbar = plt.colorbar(ticks=np.arange(np.max(failed_labels)+1))
-        cbar.ax.set_yticklabels([str(i) for i in range(np.max(failed_labels)+1)])
+        cbar = plt.colorbar(ticks=np.arange(np.min(failed_labels), np.max(failed_labels)+1))
+        cbar.ax.set_yticklabels([str(i) for i in range(np.min(failed_labels), np.max(failed_labels)+1)])
     cbar.set_label(cbar_label2)
 
     plt.title(title)
@@ -691,14 +691,14 @@ df = pd.DataFrame(records)
 # save the dataframe for reuse
 df.to_pickle(os.path.join(data_dir, 'processed_data.pkl'))
 df.head()
-# %% look at the success vs failure tsne in the last 10% steps for each task
-df_last_10 = df[df['progress'] >= 0.9]
     
 #%% visualize prefixes and suffixes with t-SNE
 visualize_df_tsne(df)
-# %%
-# look how many entries are in the dataframe
-np.vstack(df['suffix'].values).shape
-# %%
-df['suffix'].values.shape
+# %% visualize the last 10% steps with t-SNE
+df_last_10 = df[df['progress'] >= 0.9]
+visualize_df_tsne(df_last_10, title='last_10%_steps')
+#%% visualize the last 25% failed steps with t-SNE
+# filter the df for failed last 25% steps and all successful steps
+df_failed_last_25 = df[(df['progress'] >= 0.75) & (df['success'] == False) | (df['success'] == True)]
+visualize_df_tsne(df_failed_last_25, title='failed_last_25%_steps')
 # %%
