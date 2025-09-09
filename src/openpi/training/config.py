@@ -821,8 +821,8 @@ _CONFIGS = [
         ).get_freeze_filter(),
         # Turn off EMA for LoRA finetuning.
         ema_decay=None,
-        instruction_override="Play Towers of Hanoi.",
-        num_workers=0,
+        # instruction_override="Play Towers of Hanoi.",
+        # num_workers=0,
     ),
     TrainConfig(
         name="pi0_hanoi_300_subtasks",
