@@ -158,11 +158,12 @@ def eval_libero(args: Args) -> None:
 
                     # Execute action in environment
                     obs, reward, done, info = env.step(action.tolist())
+                    t += 1
                     if done:
                         task_successes += 1
                         total_successes += 1
                         break
-                    t += 1
+                
 
                 except Exception as e:
                     logging.error(f"Caught exception: {e}")
@@ -174,6 +175,9 @@ def eval_libero(args: Args) -> None:
             # Save a replay video of the episode
             suffix = "success" if done else "failure"
             # Infer one last time to save the final state and task success for PolicyRecorder
+            subgoal_successes = subgoal_detector.detect_subgoal_successes()
+            # subgoal_successes is a dictionary with values 0 or 1 for each subgoal. Turn it into a binary array
+            subgoal_bits = np.array(list(subgoal_successes.values()), dtype=np.float32)
             element = construct_element(obs, done, subgoal_bits, t, episode_idx, task_description)
             replay_images.append(element["observation/image"])
             client.infer(element)
