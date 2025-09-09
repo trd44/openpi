@@ -78,7 +78,6 @@ class Policy(BasePolicy):
         outputs["policy_timing"] = {
             "infer_ms": model_time * 1000,
         }
-        vision_language_encoding = outputs['prefix_out']
         
         return outputs
 

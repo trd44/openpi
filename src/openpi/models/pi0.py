@@ -294,6 +294,7 @@ class Pi0(_model.BaseModel):
         prefix_attn_mask = make_attn_mask(prefix_mask, prefix_ar_mask)
         positions = jnp.cumsum(prefix_mask, axis=1) - 1
         (prefix_out, _), kv_cache = self.PaliGemma.llm([prefix_tokens, None], mask=prefix_attn_mask, positions=positions)
+        
 
         def step(carry):
             def aggregate_hori_get_initial(suffix_out):
@@ -366,4 +367,4 @@ class Pi0(_model.BaseModel):
         )
 
         # cast prefix_out and suffix_out_aggregated to the dtype of 'actions'
-        return {'actions': x_0, 'prefix_out': prefix_out.astype(x_0.dtype), 'suffix_out_aggregated': suffix_out_aggregated.astype(x_0.dtype)}
+        return {'actions': x_0, 'prefix_out': prefix_out.astype(x_0.dtype), 'prefix_mask': prefix_mask, 'prefix_attn_mask': prefix_attn_mask, 'suffix_out_aggregated': suffix_out_aggregated.astype(x_0.dtype)}
