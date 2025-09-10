@@ -18,6 +18,7 @@ services:
       - /home/hrilab/Documents/.vlas/cycliclxm-slim/CyclicLxM/robosuite-task-zoo:/robosuite_task_zoo_source # Host path : Container path
       - /tmp/.X11-unix:/tmp/.X11-unix:ro # REMOVE or comment out this line
     environment:
+      - CLIENT_ARGS
       - PYTHONPATH=/robosuite_source:${PYTHONPATH}
       - PYTHONPATH=/robosuite_source:/app:/app/packages/openpi-client/src:/app/third_party/libero
       - WANDB_API_KEY=${WANDB_API_KEY}

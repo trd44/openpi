@@ -690,6 +690,7 @@ for task in task_list:
 df = pd.DataFrame(records)
 # save the dataframe for reuse
 df.to_pickle(os.path.join(data_dir, 'processed_data.pkl'))
+#%%
 df.head()
     
 #%% visualize prefixes and suffixes with t-SNE
