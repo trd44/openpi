@@ -1,17 +1,11 @@
 import base64
 import time
+import os
+from typing import *
+import numpy as np
 from openai import OpenAI
 client = OpenAI()
 
-planning_prompt = """You are a helpful robot planner play the game of towers of hanoi. The differently colored cubes represent the disks and the platforms represent the pegs in towers of Hanoi. Smaller cubes are marked with smaller numbers and bigger cubes are marked with bigger numbers. In towers of Hanoi, you can only pick up cubes from the top of the stacks, and you can only place a cube on either an empty platform or on a cube that is bigger. You should plan a sequence of steps to achieve the goal shown in the second image based on the initial state shown in the first image. You are able to execute the following two actions: 
-pick up the {cube}
-place {cube} on {location}. 
-place {cube} on {cube}.
-There exists three different sized cubes and three platforms from left to right: platform 1, platform 2, and platform 3.
-Please provide a step-by-step plan where each step is separated by a newline to achieve the goal. Let's think step by step. Output your plan in the following example format:
-pick up the blue cube
-...
-"""
 
 # Function to create a file with the Files API
 def create_file(file_path):
@@ -26,11 +20,16 @@ def create_file(file_path):
 def encode_image(image_path):
     with open(image_path, "rb") as image_file:
         return base64.b64encode(image_file.read()).decode("utf-8")
+    
+def process_output(output_text: str) -> list[str]:
+    plan = output_text.split("\n")
+    plan = [step.strip() for step in plan]
+    return plan
 
-def call_model(image_path_1: str, image_path_2: str) -> str:
-    # Example of calling GPT-5 with text and image inputs
-    base64_image_1 = encode_image(image_path_1)
-    base64_image_2 = encode_image(image_path_2)
+def query_gpt(prompt, init_image: Union[os.PathLike | np.array], goal_image: Union[os.PathLike | np.array]) -> str:
+    # image can be a path or an array
+    base64_image_1 = encode_image(init_image)
+    base64_image_2 = encode_image(goal_image)
     response = client.responses.create(
         model="gpt-5",
         input=[
@@ -39,7 +38,7 @@ def call_model(image_path_1: str, image_path_2: str) -> str:
                 "content": [
                     {
                         "type": "input_text",
-                        "text": planning_prompt,
+                        "text": prompt,
                     },
                     {
                         "type": "input_image",
@@ -53,13 +52,9 @@ def call_model(image_path_1: str, image_path_2: str) -> str:
             }
         ]
     )
-    return response.output_text
+    out =  response.output_text
+    return process_output(out)
 
-
-def process_output(output_text: str) -> list[str]:
-    plan = output_text.split("\n")
-    plan = [step.strip() for step in plan]
-    return plan
 
 if __name__ == "__main__":
     # read the images of initial towers of hanoi states in `/home/train/VLA-probing/openpi/data/hanoi/init`
@@ -76,7 +71,7 @@ if __name__ == "__main__":
     for init_image_path in init_image_paths:
         # measure inference time
         start_time = time.time()
-        plan = call_model(init_image_path, goal_image_path)
+        plan = query_gpt(init_image_path, goal_image_path)
         end_time = time.time()
         inference_times.append(end_time - start_time)
         # plan is now a string, we want to convert it to a list of steps
