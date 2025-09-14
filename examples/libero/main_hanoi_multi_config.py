@@ -56,6 +56,9 @@ class Args:
     host: str = "127.0.0.1"         # Hostname of the OpenPI policy server
     port: int = 8000                # Port of the OpenPI policy server
 
+    # --- planner ---
+    planner:str = "pddl"      # Planner to use: 'pddl' or 'gpt-5'
+
     # --- Policy Interaction ---
     resize_size: int = 224           # Target size for image resizing (must match model training)
     replan_steps: int = 50           # Number of steps per action chunk from policy server
@@ -346,6 +349,8 @@ class MultiConfigHanoiEnvironment:
         
         # Setup PDDL path
         self.pddl_path = os.path.join('/app/planning', 'PDDL', self.args.env_name.lower())
+        # uncoment the line below if running without docker
+        # self.pddl_path = os.path.join('/home/hrilab/Documents/.vlas/cycliclxm-slim/CyclicLxM/planning/', 'PDDL', self.args.env_name.lower())
         if not self.pddl_path.endswith(os.sep):
             self.pddl_path += os.sep
         

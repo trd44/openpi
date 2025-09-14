@@ -16,6 +16,11 @@ services:
       # ---> ADD THIS LINE: Mount your local Robosuite source code <---
       - /home/hrilab/Documents/.vlas/cycliclxm-slim/CyclicLxM/robosuite:/robosuite_source # Host path : Container path
       - /home/hrilab/Documents/.vlas/cycliclxm-slim/CyclicLxM/robosuite-task-zoo:/robosuite_task_zoo_source # Host path : Container path
+      # Mount dataset_making and planning modules
+      - /home/hrilab/Documents/.vlas/cycliclxm-slim/CyclicLxM/dataset_making:/app/dataset_making
+      - /home/hrilab/Documents/.vlas/cycliclxm-slim/CyclicLxM/planning:/app/planning
+      - /home/hrilab/Documents/.vlas/cycliclxm-slim/CyclicLxM/tarski:/tarski
+      - /home/hrilab/Documents/.vlas/cycliclxm-slim/CyclicLxM/Metric-FF-v2.1:/app/Metric-FF-v2.1
       - /tmp/.X11-unix:/tmp/.X11-unix:ro # REMOVE or comment out this line
     environment:
       - PYTHONPATH=/robosuite_source:${PYTHONPATH}

@@ -20,6 +20,9 @@ fonttools==4.55.3
     # via matplotlib
 glfw==1.12.0
     # via mujoco
+h5py==3.10.0
+gymnasium>=0.26.0
+    # via robosuite
 idna==3.10
     # via requests
 imageio==2.35.1

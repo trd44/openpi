@@ -210,7 +210,7 @@ class Args:
     task_timeout: int = 500          # Number of steps to wait before timing out a task (only used if time_based_progression=True)
 
     # --- Robosuite Environment ---
-    env_name: str = "Hanoi" 
+    env_name: str = "Hanoi4x3" 
     robots: str = "Panda"           # Robot model to use
     controller: str = "OSC_POSE"    # Robosuite controller name
     horizon: int = 100050             # Max steps per episode
