@@ -1,6 +1,7 @@
 import base64
 import time
 import os
+import cv2
 from typing import *
 import numpy as np
 from openai import OpenAI
@@ -17,21 +18,26 @@ def create_file(file_path):
     return result.id
 
 # Function to encode the image
-def encode_image(image_path):
-    with open(image_path, "rb") as image_file:
+# image can be a path or arraylike
+def encode_image(image: Union[os.PathLike, np.ndarray]) -> str:
+    # if the image is a numpy array, convert it to base64
+    if isinstance(image, np.ndarray):
+        _, buffer = cv2.imencode('.png', image)
+        return base64.b64encode(buffer).decode("utf-8")
+    with open(image, "rb") as image_file:
         return base64.b64encode(image_file.read()).decode("utf-8")
     
-def process_output(output_text: str) -> list[str]:
+def process_output(output_text: str) -> List[str]:
     plan = output_text.split("\n")
     plan = [step.strip() for step in plan]
     return plan
 
-def query_gpt(prompt, init_image: Union[os.PathLike | np.array], goal_image: Union[os.PathLike | np.array]) -> str:
+def query_gpt(prompt, init_image: Union[os.PathLike, np.ndarray], goal_image: Union[os.PathLike, np.ndarray], model="gpt-5") -> str:
     # image can be a path or an array
     base64_image_1 = encode_image(init_image)
     base64_image_2 = encode_image(goal_image)
     response = client.responses.create(
-        model="gpt-5",
+        model=model,
         input=[
             {
                 "role": "user",

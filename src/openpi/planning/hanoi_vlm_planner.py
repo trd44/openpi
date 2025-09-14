@@ -1,5 +1,9 @@
-
-from qwen import query_qwen
+import os
+from typing import *
+# add planning to path
+import sys
+import numpy as np
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from gpt import query_gpt
 
 planning_prompt = """You are a helpful robot planner playing towers of hanoi. The differently colored cubes represent the differently sized disks and the three rectangular areas (the left area, the middle area, the right area) represent the three pegs in towers of Hanoi. Smaller cubes are marked with smaller numbers and bigger cubes are marked with bigger numbers. In towers of Hanoi, you can only pick up cubes from the top of the stacks, and you can only place a cube in either an empty area or on top of a cube that is bigger. You should plan a sequence of actions to achieve the goal shown in the second image from the initial state shown in the first image. You are able to execute the following actions: 
@@ -11,7 +15,7 @@ pick the blue cube
 place the blue cube in the right area 
 """
 
-def load_image_pairs(path_to_images):
+def load_image_pairs(path_to_images='/home/hrilab/Documents/.vlas/first_and_last_frames/'):
     """
     Load image pairs from the given path.
     Each image pair consists of an initial state image and a goal state image.
@@ -30,7 +34,20 @@ def load_image_pairs(path_to_images):
                 image_pairs.append((init_image_path, goal_image_path))
     return image_pairs
 
+def query_model(init_image: Union[os.PathLike, np.array], goal_image: Union[os.PathLike, np.array], model='gpt-5') -> List[str]:
+    """
+    Query the model with the given prompt and images.
+    Args:
+        prompt (str): The planning prompt.
+        init_image (str): Path to the initial state image.
+        goal_image (str): Path to the goal state image.
+    Returns:
+        list of str: The plan as a list of steps.
+    """
+    return query_gpt(planning_prompt, init_image, goal_image, model=model)
+    # return query_qwen(prompt, init_image, goal_image)
+
 
 if __name__ == "__main__":
-    # read the images of initial towers of hanoi states in `/home/train/VLA-probing/openpi/data/hanoi/init`
+    
     pairs = load_image_pairs()

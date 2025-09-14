@@ -18,6 +18,19 @@ import openpi.transforms as _transforms
 T_co = TypeVar("T_co", covariant=True)
 
 
+
+# Helper to override prompt in dataset samples (picklable in DataLoader workers).
+class _PromptOverrideTransform:
+    """Transform that forces sample['prompt'] = const_text."""
+    __slots__ = ("const_text",)
+    def __init__(self, const_text: str):
+        self.const_text = const_text
+    def __call__(self, sample):
+        s = dict(sample)
+        s["prompt"] = self.const_text
+        return s
+
+
 class Dataset(Protocol[T_co]):
     """Interface for a dataset with random access."""
 
@@ -238,6 +251,7 @@ def create_data_loader(
             shuffle=shuffle,
             num_batches=num_batches,
             skip_norm_stats=skip_norm_stats,
+            instruction_override=config.instruction_override,
         )
     return create_torch_data_loader(
         data_config,
@@ -250,6 +264,7 @@ def create_data_loader(
         num_workers=config.num_workers,
         seed=config.seed,
         skip_norm_stats=skip_norm_stats,
+        instruction_override=config.instruction_override,
     )
 
 
@@ -265,6 +280,7 @@ def create_torch_data_loader(
     num_batches: int | None = None,
     num_workers: int = 0,
     seed: int = 0,
+    instruction_override: str | None = None,
 ) -> DataLoader[tuple[_model.Observation, _model.Actions]]:
     """Create a data loader for training.
 
@@ -284,6 +300,8 @@ def create_torch_data_loader(
         seed: The seed to use for shuffling the data.
     """
     dataset = create_torch_dataset(data_config, action_horizon, model_config)
+    if instruction_override:
+        dataset = TransformedDataset(dataset, [_PromptOverrideTransform(instruction_override)])
     dataset = transform_dataset(dataset, data_config, skip_norm_stats=skip_norm_stats)
 
     data_loader = TorchDataLoader(
@@ -308,6 +326,7 @@ def create_rlds_data_loader(
     skip_norm_stats: bool = False,
     shuffle: bool = False,
     num_batches: int | None = None,
+    instruction_override: str | None = None,
 ) -> DataLoader[tuple[_model.Observation, _model.Actions]]:
     """Create an RLDS data loader for training.
 
@@ -327,6 +346,10 @@ def create_rlds_data_loader(
     """
     dataset = create_rlds_dataset(data_config, action_horizon, batch_size, shuffle=shuffle)
     dataset = transform_iterable_dataset(dataset, data_config, skip_norm_stats=skip_norm_stats, is_batched=True)
+    if instruction_override:
+        dataset = IterableTransformedDataset(
+            dataset, [_PromptOverrideTransform(instruction_override)], is_batched=True
+        )
 
     data_loader = RLDSDataLoader(
         dataset,
