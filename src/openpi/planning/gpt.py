@@ -1,7 +1,10 @@
 import base64
+from io import BytesIO
 import time
 import os
 import cv2
+import PIL.Image
+import weave
 from typing import *
 import numpy as np
 from openai import OpenAI
@@ -24,14 +27,14 @@ def encode_image(image: Union[os.PathLike, np.ndarray]) -> str:
     if isinstance(image, np.ndarray):
         _, buffer = cv2.imencode('.png', image)
         return base64.b64encode(buffer).decode("utf-8")
+    if isinstance(image, PIL.Image.Image):
+        buffered = BytesIO()
+        image.save(buffered, format="PNG")
+        return base64.b64encode(buffered.getvalue()).decode("utf-8")
     with open(image, "rb") as image_file:
         return base64.b64encode(image_file.read()).decode("utf-8")
-    
-def process_output(output_text: str) -> List[str]:
-    plan = output_text.split("\n")
-    plan = [step.strip() for step in plan]
-    return plan
 
+@weave.op(name="query_gpt")
 def query_gpt(prompt, init_image: Union[os.PathLike, np.ndarray], goal_image: Union[os.PathLike, np.ndarray], model="gpt-5") -> str:
     # image can be a path or an array
     base64_image_1 = encode_image(init_image)
@@ -59,32 +62,31 @@ def query_gpt(prompt, init_image: Union[os.PathLike, np.ndarray], goal_image: Un
         ]
     )
     out =  response.output_text
-    return process_output(out)
+    return out
 
 
 if __name__ == "__main__":
-    # read the images of initial towers of hanoi states in `/home/train/VLA-probing/openpi/data/hanoi/init`
-    init_images_folder = "/home/train/VLA-probing/openpi/data/hanoi/init/"
-    init_image_paths = []
-    goal_image_path = "/home/train/VLA-probing/openpi/data/hanoi/goal/hanoi_3_cube_goal.jpeg"
-    # loop through all images in the init_images_folder
-    import os
-    inference_times = []
-    for init_image in os.listdir(init_images_folder):
-        if init_image.endswith(".jpeg") or init_image.endswith(".jpg") or init_image.endswith(".png"):
-            init_image_path = os.path.join(init_images_folder, init_image)
-            init_image_paths.append(init_image_path)
-    for init_image_path in init_image_paths:
-        # measure inference time
-        start_time = time.time()
-        plan = query_gpt(init_image_path, goal_image_path)
-        end_time = time.time()
-        inference_times.append(end_time - start_time)
-        # plan is now a string, we want to convert it to a list of steps
-        plan = process_output(plan)
-        print(init_image_path)
-        # print the plan step by step separated by newline
-        for step in plan:
-            print(step)
-        print("\n")
-    print("Average inference time:", sum(inference_times) / len(inference_times), "seconds")
+    # test the query_gpt function
+    init_image_path = "/home/train/VLA-probing/init_goal_images_per_config_640x480/bgy/episode_001_agentview_init.png"
+    goal_image_path = "/home/train/VLA-probing/init_goal_images_per_config_640x480/bgy/episode_001_agentview_goal.png"
+    planning_prompt="""You are a helpful robot planner playing towers of hanoi. The colored cubes represent the disks and the three rectangular areas (the left area, the middle area, the right area) represent the three pegs in towers of Hanoi. Smaller cubes are marked with smaller numbers and bigger cubes are marked with bigger numbers. The blue cube is smaller than the red cube. The red cube is smaller than the green cube. The green cube is smaller than the yellow cube. However, only three of the four cubes are present. You should identify which three colors are present. In towers of Hanoi, you can only pick up cubes from the top of the stacks, and you can only place a cube in either an empty area or on top of a cube that is bigger. You should plan a sequence of actions to achieve the goal shown in the second image from the initial state shown in the first image. You are able to execute the following actions: 
+    pick the {color} cube
+    place the {color} cube in the {left|middle|right} area. 
+    place the {color} cube on top of the {color} cube.
+    Please provide a step-by-step plan where each action step is separated by a newline to achieve the goal. Let's think step by step. Output your plan in the following example format:
+    pick the blue cube
+    place the blue cube in the right area
+"""
+    #init_image_path = "/home/train/VLA-probing/init_goal_images_per_config_640x480/brgy/episode_000_agentview_init.png"
+    #goal_image_path = "/home/train/VLA-probing/init_goal_images_per_config_640x480/brgy/episode_000_agentview_goal.png"
+
+    planning_prompt="""You are a helpful robot planner playing towers of hanoi. The colored cubes represent the disks and the three rectangular areas (the left area, the middle area, the right area) represent the three pegs in towers of Hanoi. Smaller cubes are marked with smaller numbers and bigger cubes are marked with bigger numbers. The blue cube is smaller than the red cube. The red cube is smaller than the green cube. The green cube is smaller than the yellow cube. In towers of Hanoi, you can only pick up cubes from the top of the stacks, and you can only place a cube in either an empty area or on top of a cube that is bigger. You should plan a sequence of actions to achieve the goal shown in the second image from the initial state shown in the first image. You are able to execute the following actions: 
+    pick the {color} cube
+    place the {color} cube in the {left|middle|right} area. 
+    place the {color} cube on top of the {color} cube.
+    Please provide a step-by-step plan where each action step is separated by a newline to achieve the goal. Let's think step by step. Output your plan in the following example format:
+    pick the blue cube
+    place the blue cube in the right area
+"""
+    out = query_gpt(planning_prompt, init_image_path, goal_image_path, model="gpt-5")
+    print(out)
