@@ -51,7 +51,8 @@ services:
       - $PWD:/app
       - ${OPENPI_DATA_HOME:-~/.cache/openpi}:/openpi_assets
     environment:
-      - SERVER_ARGS=policy:checkpoint --policy.config pi0_hanoi_300_subtasks --policy.dir /app/checkpoints/pi0_hanoi_300_subtasks/pi_hanoi_300_subtasks_no_masking/39000
+      - SERVER_ARGS=policy:checkpoint --policy.config pi0_hanoi_300_subtasks --policy.dir /app/checkpoints/pi0_hanoi_300_one_task/ft1/30000
+      # - SERVER_ARGS=policy:checkpoint --policy.config pi0_hanoi_300_subtasks --policy.dir /app/checkpoints/pi0_hanoi_300_subtasks/pi_hanoi_300_subtasks_no_masking/30000
       - OPENPI_DATA_HOME=/openpi_assets
       - IS_DOCKER=true
     deploy:

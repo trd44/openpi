@@ -71,4 +71,4 @@ CMD ["/bin/bash", "-c", \
     echo 'Tarski installed.' && \
     uv pip install wandb h5py && \
     cd /app && \
-    python examples/libero/main_hanoi.py"]
+    python examples/libero/main_hanoi_multi_config_fixed.py"]
