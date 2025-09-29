@@ -2,7 +2,11 @@ import dataclasses
 import functools
 import logging
 import platform
+import subprocess
+import time
 from typing import Any
+
+import psutil
 
 import etils.epath as epath
 import flax.nnx as nnx
@@ -45,6 +49,27 @@ def init_logging():
     logger = logging.getLogger()
     logger.setLevel(logging.INFO)
     logger.handlers[0].setFormatter(formatter)
+
+
+def get_cpu_power_usage():
+    """Get CPU power usage estimation based on frequency and utilization."""
+    try:
+        # Get CPU frequency and utilization
+        cpu_freq = psutil.cpu_freq()
+        cpu_percent = psutil.cpu_percent(interval=0.1)
+        
+        if cpu_freq and cpu_freq.current > 0:
+            # Rough estimation: higher frequency and utilization = higher power
+            # This is a simplified model - actual power depends on many factors
+            base_power = 15.0  # Base power in watts
+            freq_factor = (cpu_freq.current / cpu_freq.max) if cpu_freq.max > 0 else 1.0
+            util_factor = cpu_percent / 100.0
+            
+            estimated_power = base_power * freq_factor * (0.5 + 0.5 * util_factor)
+            return estimated_power
+    except Exception:
+        pass
+    return 0.0
 
 
 def init_wandb(config: _config.TrainConfig, *, resuming: bool, log_code: bool = False, enabled: bool = True):
@@ -263,6 +288,11 @@ def main(config: _config.TrainConfig):
         if step % config.log_interval == 0:
             stacked_infos = common_utils.stack_forest(infos)
             reduced_info = jax.device_get(jax.tree.map(jnp.mean, stacked_infos))
+            
+            # Add CPU power to existing metrics
+            cpu_power = get_cpu_power_usage()
+            reduced_info['cpu_power_watts'] = cpu_power
+            
             info_str = ", ".join(f"{k}={v:.4f}" for k, v in reduced_info.items())
             pbar.write(f"Step {step}: {info_str}")
             wandb.log(reduced_info, step=step)

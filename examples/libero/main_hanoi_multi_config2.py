@@ -1,5 +1,6 @@
 """
-Script to use the openpi model in the Towers of Hanoi Robosuite environment.
+Fixed multi-configuration Hanoi script that maintains model compatibility while supporting random block selection.
+This version addresses the key issues that cause performance degradation compared to main_hanoi.py.
 """
 import collections
 import dataclasses
@@ -17,11 +18,18 @@ import tyro
 import robosuite as suite
 from robosuite import load_controller_config
 
+# Import from dataset_making module
+import sys
+sys.path.append('/app')
+from dataset_making.record_demos import RecordDemos
+from dataset_making.panda_hanoi_detector import PandaHanoiDetector
+from planning.planner import add_predicates_to_pddl, call_planner
+
 # Assuming openpi_client is installed in the environment
 from openpi_client import image_tools
 from openpi_client import websocket_client_policy as _websocket_client_policy
 
-from hanoi_detectors import PandaHanoiDetector
+from hanoi_detectors import PandaHanoiDetector as SimpleHanoiDetector
 
 # --------------------------------------------------------------------------------------
 # Constants and Configuration
@@ -29,6 +37,14 @@ from hanoi_detectors import PandaHanoiDetector
 # Task configuration
 COLOR2OBJ = {"blue": "cube1", "red": "cube2", "green": "cube3", "yellow": "cube4"}
 AREA2PEG = {"left": "peg1", "middle": "peg2", "right": "peg3"}
+
+# Planning predicates and modes
+PLANNING_PREDICATES = {
+    "Hanoi": ['on', 'clear', 'grasped', 'smaller'],
+    "KitchenEnv": ['on', 'clear', 'grasped', 'stove_on'],
+    "NutAssembly": ['on', 'clear', 'grasped'],
+}
+PLANNING_MODE = {"Hanoi": 0, "KitchenEnv": 1, "NutAssembly": 0}
 
 # --------------------------------------------------------------------------------------
 # Simple, self‑contained predicate detector + task builder for long‑horizon execution
@@ -115,81 +131,15 @@ class SimpleHanoiDetector:
         z_above  = (top[2] - bot[2]) > self.Z_STACK_THRESH
         return xy_close and z_above
 
-
-# -----------------------------------------------------------------------------
-# Task sequence builder using PandaHanoiDetector groundings
-# -----------------------------------------------------------------------------
-def build_task_sequence_g(
-        det_ground: PandaHanoiDetector, 
-        det_simple: SimpleHanoiDetector,
-    ) -> List[Dict[str, Any]]:
-    """
-    Uses PandaHanoiDetector.get_groundings().  Each lambda re‑queries groundings
-    so it always reflects the latest simulation state.
-    """
-    def g():
-        # fresh snapshot every call
-        return det_ground.get_groundings(as_dict=True,
-                                         binary_to_float=False,
-                                         return_distance=False)
-
-    return [
-        # 1  Pick blue
-        {"prompt": "Pick the blue block.",
-         "done": lambda: bool(g().get("grasped(cube1)", False)) and det_simple.lifted("blue")},
-
-        # 2  Place blue on right peg
-        {"prompt": "Place the blue block in the right area.",
-         "done": lambda: bool(g().get("on(cube1,peg3)", False))},
-
-        # 3  Pick red
-        {"prompt": "Pick the red block.",
-         "done": lambda: bool(g().get("grasped(cube2)", False)) and det_simple.lifted("red")},
-
-        # 4  Place red on middle peg
-        {"prompt": "Place the red block in the middle area.",
-         "done": lambda: bool(g().get("on(cube2,peg2)", False))},
-
-        # 5  Pick blue
-        {"prompt": "Pick the blue block.",
-         "done": lambda: bool(g().get("grasped(cube1)", False)) and det_simple.lifted("blue")},
-
-        # 6  Stack blue on red
-        {"prompt": "Place the blue block on top of the red block.",
-         "done": lambda: bool(g().get("on(cube1,cube2)", False))},
-
-        # 7  Pick green
-        {"prompt": "Pick the green block.",
-         "done": lambda: bool(g().get("grasped(cube3)", False)) and det_simple.lifted("green")},
-
-        # 8  Place green on right peg
-        {"prompt": "Place the green block in the right area.",
-         "done": lambda: bool(g().get("on(cube3,peg3)", False))},
-
-        # 9
-        {"prompt": "Pick the blue block.",
-         "done": lambda: bool(g().get("grasped(cube1)", False)) and det_simple.lifted("blue")},
-
-        # 10  Move blue to left peg
-        {"prompt": "Place the blue block in the left area.",
-         "done": lambda: bool(g().get("on(cube1,peg1)", False))},
-
-        # 11  Pick red
-        {"prompt": "Pick the red block.",
-         "done": lambda: bool(g().get("grasped(cube2)", False)) and det_simple.lifted("red")},
-
-        # 12  Stack red on green
-        {"prompt": "Place the red block on top of the green block.",
-         "done": lambda: bool(g().get("on(cube2,cube3)", False))},
-
-        # 13
-        {"prompt": "Pick the blue block.",
-         "done": lambda: bool(g().get("grasped(cube1)", False)) and det_simple.lifted("blue")},
-
-        # 14  Stack blue on red
-        {"prompt": "Place the blue block on top of the red block.",
-         "done": lambda: bool(g().get("on(cube1,cube2)", False))},
-    ]
+    def grasped(self, color):
+        """Check if cube is grasped by checking if it's lifted and close to gripper."""
+        if not self.lifted(color):
+            return False
+        # Additional check: cube should be close to gripper position
+        cube_pos = self._cube_pos(color)
+        gripper_pos = self.env.sim.data.get_body_xpos("robot0_gripper")
+        distance = self.np.linalg.norm(cube_pos - gripper_pos)
+        return distance < 0.1  # Within 10cm of gripper
 
 
 # --------------------------------------------------------------------------------------
@@ -197,24 +147,33 @@ def build_task_sequence_g(
 # --------------------------------------------------------------------------------------
 @dataclasses.dataclass
 class Args:
-    """Arguments for running Robosuite with OpenPI Websocket Policy"""
+    """Arguments for running Robosuite with OpenPI Websocket Policy and multi-config support"""
     # --- Server Connection ---
     host: str = "127.0.0.1"         # Hostname of the OpenPI policy server
     port: int = 8000                # Port of the OpenPI policy server
 
+    # --- planner ---
+    planner:str = "pddl"      # Planner to use: 'pddl' or 'gpt-5'
+
     # --- Policy Interaction ---
     resize_size: int = 224           # Target size for image resizing (must match model training)
     replan_steps: int = 50           # Number of steps per action chunk from policy server
-    use_sequential_tasks: bool = True # If True, use sequential task prompts from build_task_sequence_g; if False, use single prompt "Play Towers of Hanoi."
+    use_sequential_tasks: bool = True # If True, use sequential task prompts; if False, use single prompt
     time_based_progression: bool = False # If True, advance to next task after task_timeout steps regardless of completion
-    task_timeout: int = 500          # Number of steps to wait before timing out a task (only used if time_based_progression=True)
+    task_timeout: int = 500          # Number of steps to wait before timing out a task
 
     # --- Robosuite Environment ---
-    env_name: str = "Hanoi" 
+    env_name: str = "Hanoi"       # Use same env as main_hanoi.py for compatibility
+    env: str = "Hanoi"                # Environment name for RecordDemos compatibility
     robots: str = "Panda"           # Robot model to use
     controller: str = "OSC_POSE"    # Robosuite controller name
     horizon: int = 100050             # Max steps per episode
     skip_steps: int = 50            # Number of initial steps to skip (e.g., wait for objects to settle)
+
+    # --- Multi-configuration support ---
+    random_block_placement: bool = False  # Disable by default for better performance
+    random_block_selection: bool = True   # Enable random selection of 3 blocks
+    cube_init_pos_noise_std: float = 0.01  # Std dev for XY jitter of initial tower position
 
     # --- Rendering & Video ---
     render_mode: str = "headless"    # Rendering mode: 'headless' (save video) or 'human' (live view via X11)
@@ -226,23 +185,23 @@ class Args:
     camera_width: int = 256 # Rendered camera width (before potential resize)
     required_cameras: List[str] = dataclasses.field(
         default_factory=lambda: ["agentview", "robot0_eye_in_hand"]
-        ) # Required cameras for OpenPI preprocessing (will be added to camera_names if missing)
+        ) # Required cameras for OpenPI preprocessing
 
     # --- Misc ---
     seed: int = 3           #: Random seed
-    episodes: int = 10      #: How many episodes to run back-to-back
+    episodes: int = 50      #: How many episodes to run back-to-back
 
     # --- Logging ---
-    wandb_project: str = "TEST hanoi 300 subtasks" #: W&B project name
+    wandb_project: str = "TEST pi0 multi config 2 30_000" #: W&B project name
     log_every_n_seconds: float = 0.5 #: Logging interval for W&B settings
     
     def generate_video_filename(self, episode: int) -> str:
         """Generate video filename based on current arguments and episode number."""
-        return f"{self.env_name}_seed{self.seed}_ep{episode+1}_{time.strftime('%H%M%S')}.mp4"
+        return f"{self.env_name}_multi_config_seed{self.seed}_ep{episode+1}_{time.strftime('%H%M%S')}.mp4"
     
     def generate_wandb_run_name(self, episode: int) -> str:
         """Generate W&B run name based on current arguments and episode number."""
-        return f"{self.env_name}_seed{self.seed}_ep{episode+1}_{time.strftime('%H%M%S')}"
+        return f"{self.env_name}_multi_config_seed{self.seed}_ep{episode+1}_{time.strftime('%H%M%S')}"
     
     def get_required_cameras(self) -> List[str]:
         """Get the list of required cameras for OpenPI preprocessing."""
@@ -293,8 +252,8 @@ def quaternion_to_euler(quat: np.ndarray) -> np.ndarray:
 # --------------------------------------------------------------------------------------
 # Environment setup and management
 # --------------------------------------------------------------------------------------
-class HanoiEnvironment:
-    """Manages the Robosuite Hanoi environment setup and operations."""
+class MultiConfigHanoiEnvironment:
+    """Manages the Robosuite Hanoi environment setup with multi-configuration support."""
     
     def __init__(self, args: Args):
         self.args = args
@@ -302,6 +261,7 @@ class HanoiEnvironment:
         self.detector_simple = None
         self.detector_ground = None
         self.tasks = None
+        self.recorder = None
         
     def setup(self) -> None:
         """Initialize the environment and detectors."""
@@ -320,7 +280,7 @@ class HanoiEnvironment:
                 logging.warning(f"Required camera '{cam}' not in requested camera_names. Adding it.")
                 self.args.camera_names.append(cam)
         
-        # Create environment
+        # Create environment with multi-config support - NO GYM WRAPPER
         self.env = suite.make(
             env_name=self.args.env_name,
             robots=self.args.robots,
@@ -337,9 +297,16 @@ class HanoiEnvironment:
             render_camera="agentview" if has_renderer else None,
             ignore_done=True,  # Let horizon end the episode
             hard_reset=False,  # Faster resets can sometimes be unstable, switch if needed
-            random_block_placement=False,
-            random_block_selection=False,
+            random_block_placement=self.args.random_block_placement,
+            random_block_selection=self.args.random_block_selection,
+            cube_init_pos_noise_std=self.args.cube_init_pos_noise_std
         )
+        
+        logging.info(f"Environment created with random_block_placement={self.args.random_block_placement}, random_block_selection={self.args.random_block_selection}")
+        
+        # Apply minimal patches only for random_block_selection
+        if self.args.random_block_selection:
+            self._apply_random_selection_patch()
         
         # Seed environment
         try:
@@ -353,22 +320,241 @@ class HanoiEnvironment:
         # Initialize detectors
         self.detector_simple = SimpleHanoiDetector(self.env)
         self.detector_ground = PandaHanoiDetector(self.env)
-        self.tasks = build_task_sequence_g(self.detector_ground, self.detector_simple)
         
+        # Setup PDDL path
+        self.pddl_path = os.path.join('/app/planning', 'PDDL', self.args.env_name.lower())
+        if not self.pddl_path.endswith(os.sep):
+            self.pddl_path += os.sep
+        
+        # Create recorder for planning
+        self.recorder = RecordDemos(
+            self.env,
+            vision_based=True,  # Use vision-based observations
+            detector=self.detector_ground,
+            pddl_path=self.pddl_path,
+            args=self.args,
+            render=self.args.render_mode == 'human',
+            randomize=True,
+            noise_std_factor=0.03
+        )
+    
+    def _apply_random_selection_patch(self):
+        """Apply minimal patch for random_block_selection compatibility."""
+        original_place_block_tower = self.env.place_block_tower
+        
+        def patched_place_block_tower():
+            """Patched version that respects current_block_config when random_block_selection=True"""
+            try:
+                if hasattr(self.env, 'random_block_selection') and self.env.random_block_selection:
+                    if hasattr(self.env, 'current_block_config') and self.env.current_block_config:
+                        available_cubes = set(self.env.current_block_config)
+                        logging.info(f"Available cubes in current_block_config: {available_cubes}")
+                        
+                        # Update placement initializers to only use available cubes
+                        cube_name_to_obj = {
+                            'cube1': self.env.cube1,
+                            'cube2': self.env.cube2, 
+                            'cube3': self.env.cube3,
+                            'cube4': self.env.cube4
+                        }
+                        
+                        if hasattr(self.env, 'large_block_placement_initializer'):
+                            large_cube = self.env.current_block_config[2] if len(self.env.current_block_config) > 2 else None
+                            if large_cube and large_cube in cube_name_to_obj:
+                                self.env.large_block_placement_initializer.mujoco_objects = [cube_name_to_obj[large_cube]]
+                        
+                        if hasattr(self.env, 'medium_block_placement_initializer'):
+                            medium_cube = self.env.current_block_config[1] if len(self.env.current_block_config) > 1 else None
+                            if medium_cube and medium_cube in cube_name_to_obj:
+                                self.env.medium_block_placement_initializer.mujoco_objects = [cube_name_to_obj[medium_cube]]
+                        
+                        if hasattr(self.env, 'small_block_placement_initializer'):
+                            small_cube = self.env.current_block_config[0] if len(self.env.current_block_config) > 0 else None
+                            if small_cube and small_cube in cube_name_to_obj:
+                                self.env.small_block_placement_initializer.mujoco_objects = [cube_name_to_obj[small_cube]]
+                
+                return original_place_block_tower()
+                
+            except Exception as e:
+                logging.error(f"Error in patched place_block_tower: {e}")
+                return original_place_block_tower()
+        
+        self.env.place_block_tower = patched_place_block_tower
+        logging.info("Applied minimal patch for random_block_selection")
+    
     def reset(self):
-        """Reset the environment and reinitialize detectors."""
+        """Reset the environment and generate a new plan."""
         try:
+            # Reset the environment
+            logging.info("Resetting environment...")
             obs = self.env.reset()
+            logging.info("Environment reset successful")
+            
             # Reinitialize detectors after reset
+            logging.info("Initializing detectors...")
             self.detector_simple = SimpleHanoiDetector(self.env)
+            logging.info("Simple detector initialized")
+            
             self.detector_ground = PandaHanoiDetector(self.env)
-            self.tasks = build_task_sequence_g(self.detector_ground, self.detector_simple)
+            logging.info(f"Ground detector initialized with objects: {self.detector_ground.objects}")
+            
+            # Generate a new plan using the recorder
+            logging.info("Generating plan...")
+            self.recorder.reset()
+            logging.info("Plan generation successful")
+            
+            # Build task sequence based on the generated plan
+            logging.info("Building task sequence...")
+            self.tasks = self._build_task_sequence_from_plan()
+            logging.info(f"Task sequence built with {len(self.tasks)} tasks")
+            
             return obs
         except Exception as e:
             logging.error(f"Failed to reset environment: {e}")
-            if "unexpected keyword argument 'seed'" in str(e):
-                logging.error("Environment reset failed likely because it expects env.seed() instead of env.reset(seed=...).")
+            import traceback
+            logging.error(f"Full traceback: {traceback.format_exc()}")
             raise
+    
+    def _build_task_sequence_from_plan(self) -> List[Dict[str, Any]]:
+        """Build task sequence from the generated plan."""
+        try:
+            if not hasattr(self.recorder, 'plan') or not self.recorder.plan:
+                logging.warning("No plan available, using default task sequence")
+                return self._get_default_task_sequence()
+            
+            logging.info(f"Building task sequence from plan: {self.recorder.plan}")
+            tasks = []
+            for i, op_str in enumerate(self.recorder.plan):
+                # Convert PDDL operator to natural language
+                natural_instruction = self._convert_plan_to_natural_language(op_str)
+                
+                # Create task with completion check
+                task = {
+                    "prompt": natural_instruction,
+                    "done": self._create_completion_check(op_str, i)
+                }
+                tasks.append(task)
+            
+            return tasks
+        except Exception as e:
+            logging.error(f"Error building task sequence from plan: {e}")
+            logging.warning("Falling back to default task sequence")
+            return self._get_default_task_sequence()
+    
+    def _convert_plan_to_natural_language(self, op_str: str) -> str:
+        """Convert PDDL plan to natural language commands."""
+        colors = {"cube1": "blue block", "cube2": "red block", "cube3": "green block", "cube4": "yellow block"}
+        areas = {"peg1": "left area", "peg2": "middle area", "peg3": "right area"}
+        op = op_str.lower().split()
+        if not op: return ""
+        if op[0] == "pick":
+            block = colors.get(op[1], op[1])
+            return f"Pick the {block}."
+        if op[0] == "place":
+            block = colors.get(op[1], op[1])
+            # Place target can be area or another block
+            if op[2].startswith("cube"):
+                target = colors.get(op[2], op[2])
+                return f"Place the {block} on top of the {target}."
+            else:
+                area = areas.get(op[2], op[2])
+                return f"Place the {block} in the {area}."
+        return op_str  # fallback
+    
+    def _create_completion_check(self, op_str: str, step_idx: int) -> Callable:
+        """Create a completion check function for a given operation."""
+        try:
+            op = op_str.lower().split()
+            
+            if op[0] == "pick":
+                cube = op[1]
+                def check_pick():
+                    try:
+                        return (bool(self.detector_ground.get_groundings(as_dict=True, binary_to_float=False, return_distance=False).get(f"grasped({cube})", False)) and 
+                                self.detector_simple.grasped(cube))
+                    except Exception as e:
+                        logging.error(f"Error in pick check for {cube}: {e}")
+                        return False
+                return check_pick
+                
+            elif op[0] == "place":
+                cube = op[1]
+                target = op[2]
+                def check_place():
+                    try:
+                        return bool(self.detector_ground.get_groundings(as_dict=True, binary_to_float=False, return_distance=False).get(f"on({cube},{target})", False))
+                    except Exception as e:
+                        logging.error(f"Error in place check for {cube} on {target}: {e}")
+                        return False
+                return check_place
+            
+            else:
+                # Default: always return False for unknown operations
+                return lambda: False
+        except Exception as e:
+            logging.error(f"Error creating completion check for {op_str}: {e}")
+            return lambda: False
+    
+    def _get_default_task_sequence(self) -> List[Dict[str, Any]]:
+        """Get default task sequence when no plan is available."""
+        try:
+            def g():
+                try:
+                    return self.detector_ground.get_groundings(as_dict=True, binary_to_float=False, return_distance=False)
+                except Exception as e:
+                    logging.error(f"Error getting groundings: {e}")
+                    return {}
+            
+            # Get available cubes dynamically
+            available_cubes = []
+            for cube in ['cube1', 'cube2', 'cube3', 'cube4']:
+                try:
+                    if cube in self.detector_ground.objects:
+                        available_cubes.append(cube)
+                except Exception as e:
+                    logging.error(f"Error checking cube {cube}: {e}")
+                    continue
+            
+            logging.info(f"Available cubes: {available_cubes}")
+            
+            if len(available_cubes) < 1:
+                # Fallback to a very simple task if no cubes available
+                return [
+                    {"prompt": "Move the robot arm.", "done": lambda: True},
+                ]
+            
+            if len(available_cubes) < 2:
+                # Fallback to a simple task if not enough cubes
+                return [
+                    {"prompt": "Pick up a block.", "done": lambda: any(g().get(f"grasped({cube})", False) for cube in available_cubes)},
+                    {"prompt": "Place the block in the right area.", "done": lambda: any(g().get(f"on({cube},peg3)", False) for cube in available_cubes)},
+                ]
+            
+            # Create tasks for available cubes
+            tasks = []
+            colors = {"cube1": "blue", "cube2": "red", "cube3": "green", "cube4": "yellow"}
+            pegs = ["peg1", "peg2", "peg3"]
+            
+            for i, cube in enumerate(available_cubes):
+                color = colors.get(cube, cube)
+                target_peg = pegs[i % len(pegs)]  # Distribute across pegs
+                
+                tasks.append({
+                    "prompt": f"Pick the {color} block.", 
+                    "done": lambda c=cube: bool(g().get(f"grasped({c})", False)) and self.detector_simple.grasped(colors.get(c, c))
+                })
+                tasks.append({
+                    "prompt": f"Place the {color} block in the {target_peg} area.", 
+                    "done": lambda c=cube, p=target_peg: bool(g().get(f"on({c},{p})", False))
+                })
+            
+            return tasks
+        except Exception as e:
+            logging.error(f"Error creating default task sequence: {e}")
+            # Return a very simple fallback
+            return [
+                {"prompt": "Move the robot arm.", "done": lambda: True},
+            ]
     
     def close(self):
         """Close the environment."""
@@ -577,16 +763,17 @@ class ObservationPreprocessor:
 # Main execution function
 # --------------------------------------------------------------------------------------
 def run_robosuite_with_openpi(args: Args) -> None:
-    """Runs a Robosuite environment controlled by an OpenPI policy server."""
+    """Runs a Robosuite environment controlled by an OpenPI policy server with multi-config support."""
     logging.info(f"Running Robosuite env '{args.env_name}' with OpenPI server at {args.host}:{args.port}")
     logging.info(f"Rendering mode: {args.render_mode}")
+    logging.info(f"Multi-config settings: random_block_placement={args.random_block_placement}, random_block_selection={args.random_block_selection}")
     
     # Initialize W&B
     settings = wandb.Settings(_stats_sampling_interval=args.log_every_n_seconds)
-    group_name = f"inference_experiments_{time.strftime('%Y%m%d-%H%M%S')}"
+    group_name = f"multi_config_hanoi_fixed_{time.strftime('%Y%m%d-%H%M%S')}"
     
     # Setup environment
-    env_manager = HanoiEnvironment(args)
+    env_manager = MultiConfigHanoiEnvironment(args)
     env_manager.setup()
     
     # Setup task manager
@@ -595,7 +782,7 @@ def run_robosuite_with_openpi(args: Args) -> None:
     
     # Log the mode being used
     if args.use_sequential_tasks:
-        logging.info(f"Running in SEQUENTIAL TASK MODE with {len(env_manager.tasks)} tasks")
+        logging.info(f"Running in SEQUENTIAL TASK MODE with dynamic task generation")
         if args.time_based_progression:
             logging.info(f"Tasks will progress automatically as goals are achieved OR after {args.task_timeout} steps timeout")
         else:
@@ -620,7 +807,7 @@ def run_robosuite_with_openpi(args: Args) -> None:
         # Initialize W&B run for this episode
         run_name = args.generate_wandb_run_name(ep)
         wandb_run = wandb.init(
-            project="openpi_hanoi_300_inference_rgb",
+            project=args.wandb_project,
             name=run_name,
             group=group_name,
             config=dataclasses.asdict(args),
@@ -641,6 +828,9 @@ def run_robosuite_with_openpi(args: Args) -> None:
         # Reset environment
         try:
             obs = env_manager.reset()
+            # Update task manager with new tasks
+            task_manager.tasks = env_manager.tasks
+            task_manager.reset_episode()
         except Exception as e:
             logging.error(f"Failed to reset environment: {e}")
             wandb_run.finish()

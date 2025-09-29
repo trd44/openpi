@@ -44,10 +44,11 @@ AREA2PEG = {"left": "peg1", "middle": "peg2", "right": "peg3"}
 # Planning predicates and modes
 PLANNING_PREDICATES = {
     "Hanoi": ['on', 'clear', 'grasped', 'smaller'],
+    "Hanoi4x3": ['on', 'clear', 'grasped', 'smaller'],
     "KitchenEnv": ['on', 'clear', 'grasped', 'stove_on'],
     "NutAssembly": ['on', 'clear', 'grasped'],
 }
-PLANNING_MODE = {"Hanoi": 0, "KitchenEnv": 1, "NutAssembly": 0}
+PLANNING_MODE = {"Hanoi": 0, "Hanoi4x3": 0, "KitchenEnv": 1, "NutAssembly": 0}
 
 # --------------------------------------------------------------------------------------
 # Configuration dataclass
@@ -99,7 +100,7 @@ class Args:
     episodes: int = 50      #: How many episodes to run back-to-back
 
     # --- Logging ---
-    wandb_project: str = "TEST_pi0_hanoi_300_subtasks_4_blocks"   #: W&B project name
+    wandb_project: str = "FINAL_pi0_hanoi_300_one_task_4_blocks"   #: W&B project name
     log_every_n_seconds: float = 0.5                              #: Logging interval for W&B settings
     
     def generate_video_filename(self, episode: int) -> str:
@@ -384,58 +385,68 @@ class MultiConfigHanoiEnvironment:
         # The issue is that both methods try to access cubes that don't exist when these flags are True.
         # We need to patch both methods to respect current_block_config.
         
-        # Patch place_block_tower for random_block_selection
-        original_place_block_tower = self.env.place_block_tower
+        # Check if place_block_tower method exists before trying to patch it
+        if hasattr(self.env, 'place_block_tower'):
+            # Patch place_block_tower for random_block_selection
+            original_place_block_tower = self.env.place_block_tower
+            
+            def patched_place_block_tower():
+                """Patched version that respects current_block_config when random_block_selection=True"""
+                try:
+                    # Check if we have random_block_selection and current_block_config is set
+                    if hasattr(self.env, 'random_block_selection') and self.env.random_block_selection:
+                        if hasattr(self.env, 'current_block_config') and self.env.current_block_config:
+                            available_cubes = set(self.env.current_block_config)
+                            logging.info(f"Available cubes in current_block_config: {available_cubes}")
+                            
+                            # Update placement initializers to only use available cubes
+                            if hasattr(self.env, 'large_block_placement_initializer'):
+                                large_cube = self.env.current_block_config[2] if len(self.env.current_block_config) > 2 else None
+                                if large_cube and hasattr(self.env, large_cube):
+                                    self.env.large_block_placement_initializer.mujoco_objects = [getattr(self.env, large_cube)]
+                                    logging.info(f"Updated large_block_placement_initializer to use {large_cube}")
+                            
+                            if hasattr(self.env, 'medium_block_placement_initializer'):
+                                medium_cube = self.env.current_block_config[1] if len(self.env.current_block_config) > 1 else None
+                                if medium_cube and hasattr(self.env, medium_cube):
+                                    self.env.medium_block_placement_initializer.mujoco_objects = [getattr(self.env, medium_cube)]
+                                    logging.info(f"Updated medium_block_placement_initializer to use {medium_cube}")
+                            
+                            if hasattr(self.env, 'small_block_placement_initializer'):
+                                small_cube = self.env.current_block_config[0] if len(self.env.current_block_config) > 0 else None
+                                if small_cube and hasattr(self.env, small_cube):
+                                    self.env.small_block_placement_initializer.mujoco_objects = [getattr(self.env, small_cube)]
+                                    logging.info(f"Updated small_block_placement_initializer to use {small_cube}")
+                    
+                    # Call original method
+                    return original_place_block_tower()
+                    
+                except Exception as e:
+                    logging.error(f"Error in patched place_block_tower: {e}")
+                    import traceback
+                    logging.error(f"Full traceback: {traceback.format_exc()}")
+                    # Fallback to original method
+                    return original_place_block_tower()
+            
+            # Apply the patch
+            self.env.place_block_tower = patched_place_block_tower
+            logging.info("Applied place_block_tower patch")
+        else:
+            logging.warning("place_block_tower method not found on environment. Skipping patch.")
         
-        def patched_place_block_tower():
-            """Patched version that respects current_block_config when random_block_selection=True"""
-            try:
-                # Check if we have random_block_selection and current_block_config is set
-                if hasattr(self.env, 'random_block_selection') and self.env.random_block_selection:
-                    if hasattr(self.env, 'current_block_config') and self.env.current_block_config:
-                        available_cubes = set(self.env.current_block_config)
-                        logging.info(f"Available cubes in current_block_config: {available_cubes}")
-                        
-                        # Update placement initializers to only use available cubes
-                        if hasattr(self.env, 'large_block_placement_initializer'):
-                            large_cube = self.env.current_block_config[2] if len(self.env.current_block_config) > 2 else None
-                            if large_cube and hasattr(self.env, large_cube):
-                                self.env.large_block_placement_initializer.mujoco_objects = [getattr(self.env, large_cube)]
-                                logging.info(f"Updated large_block_placement_initializer to use {large_cube}")
-                        
-                        if hasattr(self.env, 'medium_block_placement_initializer'):
-                            medium_cube = self.env.current_block_config[1] if len(self.env.current_block_config) > 1 else None
-                            if medium_cube and hasattr(self.env, medium_cube):
-                                self.env.medium_block_placement_initializer.mujoco_objects = [getattr(self.env, medium_cube)]
-                                logging.info(f"Updated medium_block_placement_initializer to use {medium_cube}")
-                        
-                        if hasattr(self.env, 'small_block_placement_initializer'):
-                            small_cube = self.env.current_block_config[0] if len(self.env.current_block_config) > 0 else None
-                            if small_cube and hasattr(self.env, small_cube):
-                                self.env.small_block_placement_initializer.mujoco_objects = [getattr(self.env, small_cube)]
-                                logging.info(f"Updated small_block_placement_initializer to use {small_cube}")
-                
-                # Call original method
-                return original_place_block_tower()
-                
-            except Exception as e:
-                logging.error(f"Error in patched place_block_tower: {e}")
-                import traceback
-                logging.error(f"Full traceback: {traceback.format_exc()}")
-                # Fallback to original method
-                return original_place_block_tower()
-        
-        # Patch place_blocks_randomly for random_block_placement
-        original_place_blocks_randomly = self.env.place_blocks_randomly
-        
-        def patched_place_blocks_randomly():
-            """Completely rewritten version that respects current_block_config when random_block_placement=True"""
-            try:
-                # Check if we have random_block_placement and current_block_config is set
-                if hasattr(self.env, 'random_block_placement') and self.env.random_block_placement:
-                    if hasattr(self.env, 'current_block_config') and self.env.current_block_config:
-                        available_cubes = set(self.env.current_block_config)
-                        logging.info(f"Available cubes in current_block_config for placement: {available_cubes}")
+        # Check if place_blocks_randomly method exists before trying to patch it
+        if hasattr(self.env, 'place_blocks_randomly'):
+            # Patch place_blocks_randomly for random_block_placement
+            original_place_blocks_randomly = self.env.place_blocks_randomly
+            
+            def patched_place_blocks_randomly():
+                """Completely rewritten version that respects current_block_config when random_block_placement=True"""
+                try:
+                    # Check if we have random_block_placement and current_block_config is set
+                    if hasattr(self.env, 'random_block_placement') and self.env.random_block_placement:
+                        if hasattr(self.env, 'current_block_config') and self.env.current_block_config:
+                            available_cubes = set(self.env.current_block_config)
+                            logging.info(f"Available cubes in current_block_config for placement: {available_cubes}")
                         
                         # Set the large, medium, small variables to use available cubes
                         available_cubes_list = list(available_cubes)
@@ -486,20 +497,21 @@ class MultiConfigHanoiEnvironment:
                         # Now call the original method with the corrected variables
                         return original_place_blocks_randomly()
                 
-                # Call original method
-                return original_place_blocks_randomly()
-                
-            except Exception as e:
-                logging.error(f"Error in patched place_blocks_randomly: {e}")
-                import traceback
-                logging.error(f"Full traceback: {traceback.format_exc()}")
-                # Fallback to original method
-                return original_place_blocks_randomly()
-        
-        # Apply the patches
-        self.env.place_block_tower = patched_place_block_tower
-        self.env.place_blocks_randomly = patched_place_blocks_randomly
-        logging.info("Applied monkey patches for robosuite random_block_selection and random_block_placement bugs")
+                    # Call original method
+                    return original_place_blocks_randomly()
+                    
+                except Exception as e:
+                    logging.error(f"Error in patched place_blocks_randomly: {e}")
+                    import traceback
+                    logging.error(f"Full traceback: {traceback.format_exc()}")
+                    # Fallback to original method
+                    return original_place_blocks_randomly()
+            
+            # Apply the patch
+            self.env.place_blocks_randomly = patched_place_blocks_randomly
+            logging.info("Applied place_blocks_randomly patch")
+        else:
+            logging.warning("place_blocks_randomly method not found on environment. Skipping patch.")
         
         # Add GymWrapper for compatibility with RecordDemos (after patching)
         # Add GymWrapper for compatibility with RecordDemos (like in working examples)
@@ -520,7 +532,9 @@ class MultiConfigHanoiEnvironment:
         self.detector_ground = PandaHanoiDetector(self.env)
         
         # Setup PDDL path
-        self.pddl_path = os.path.join('/app/planning', 'PDDL', self.args.env_name.lower())
+        # Use 'hanoi' for PDDL path since Hanoi4x3 uses the same PDDL as Hanoi
+        pddl_env_name = 'hanoi' if self.args.env_name.lower() == 'hanoi4x3' else self.args.env_name.lower()
+        self.pddl_path = os.path.join('/app/planning', 'PDDL', pddl_env_name)
         # uncoment the line below if running without docker
         # self.pddl_path = os.path.join('/home/hrilab/Documents/.vlas/cycliclxm-slim/CyclicLxM/planning/', 'PDDL', self.args.env_name.lower())
         if not self.pddl_path.endswith(os.sep):

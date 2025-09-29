@@ -213,7 +213,7 @@ class Args:
     env_name: str = "Hanoi" 
     robots: str = "Panda"           # Robot model to use
     controller: str = "OSC_POSE"    # Robosuite controller name
-    horizon: int = 100050             # Max steps per episode
+    horizon: int = 10050             # Max steps per episode
     skip_steps: int = 50            # Number of initial steps to skip (e.g., wait for objects to settle)
 
     # --- Rendering & Video ---
@@ -233,7 +233,7 @@ class Args:
     episodes: int = 10      #: How many episodes to run back-to-back
 
     # --- Logging ---
-    wandb_project: str = "TEST hanoi 300 subtasks" #: W&B project name
+    wandb_project: str = "TEST hanoi 300 subtasks 35000" #: W&B project name
     log_every_n_seconds: float = 0.5 #: Logging interval for W&B settings
     
     def generate_video_filename(self, episode: int) -> str:
@@ -620,7 +620,7 @@ def run_robosuite_with_openpi(args: Args) -> None:
         # Initialize W&B run for this episode
         run_name = args.generate_wandb_run_name(ep)
         wandb_run = wandb.init(
-            project="openpi_hanoi_300_inference_rgb",
+            project="hanoi_openpi_one_task",
             name=run_name,
             group=group_name,
             config=dataclasses.asdict(args),
@@ -749,17 +749,15 @@ def run_robosuite_with_openpi(args: Args) -> None:
             # Check task completion
             if task_manager.check_task_completion(t):
                 # Log task completion (always done regardless of mode)
-                # Note: current_task_idx was already incremented in check_task_completion
-                completed_task_idx = task_manager.current_task_idx - 1
                 wandb.log(
-                    {f"task_{completed_task_idx + 1}_completions": task_manager.task_totals[completed_task_idx]},
+                    {f"task_{task_manager.current_task_idx}_completions": task_manager.task_totals[task_manager.current_task_idx - 1]},
                     step=global_step,
                 )
                 wandb.log(
-                    {f"task_{completed_task_idx + 1}_completed_step": t},
+                    {f"task_{task_manager.current_task_idx}_completed_step": t},
                     step=global_step,
                 )
-                wandb_run.summary[f"task{completed_task_idx + 1}_completed_step"] = t
+                wandb_run.summary[f"task{task_manager.current_task_idx}_completed_step"] = t
                 
                 # Clear action plan to force replanning (only in sequential mode)
                 if task_manager.use_sequential_tasks:
