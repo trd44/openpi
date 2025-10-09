@@ -13,7 +13,7 @@ from datetime import datetime
 #%%
 
 #%% read the directories in /home/train/VLA-probing/policy_records
-data_dir = '/home/train/VLA-probing/policy_records'
+data_dir = '/home/train/VLA-probing/openpi/policy_records'
 # list all the directories in data_dir that are directories
 task_list = [d for d in os.listdir(data_dir) if os.path.isdir(os.path.join(data_dir, d))]
 task_list
@@ -227,7 +227,7 @@ def t_SNE(episode_data, perplexity=50, n_components=2, random_state=42):
     episode_data_tsne = tsne.fit_transform(episode_data_pca)
     return episode_data_tsne
 
-def visualize_episode_tsne(episode_data_tsne, episode_labels, title="t-SNE of Episode", save_path=None, cmap="summer", marker='o', cbar_label='Subgoal Progress'):
+def visualize_tsne(episode_data_tsne, episode_labels, title="t-SNE of Episode", save_path=None, cmap="summer", marker='o', cbar_label='Subgoal Progress'):
     """
     Visualize the t-SNE of the episode data.
     Args:
@@ -340,32 +340,32 @@ def visualize_df_tsne(df, title=""):
 
         # visualize the prefix successful episode with t-SNE, coloring by timesteps
         success_prefix_df = task_df[task_df['success'] == True]
-        visualize_episode_tsne(np.vstack(success_prefix_df['task_prefix_tsne']), np.vstack(success_prefix_df['timestep'], dtype=int), title=f"t-SNE of Successful Prefixes - {task}", save_path=os.path.join(task_path, f'tsne_successful_prefixes_{title}.png'), cbar_label='timestep')
+        visualize_tsne(np.vstack(success_prefix_df['task_prefix_tsne']), np.vstack(success_prefix_df['timestep'], dtype=int), title=f"t-SNE of Successful Prefixes - {task}", save_path=os.path.join(task_path, f'tsne_successful_prefixes_{title}.png'), cbar_label='timestep')
 
         # visualize the prefix failed episode with t-SNE, coloring by timesteps
         failed_prefix_df = task_df[task_df['success'] == False]
-        visualize_episode_tsne(np.vstack(failed_prefix_df['task_prefix_tsne']), np.vstack(failed_prefix_df['timestep'], dtype=int), title=f"t-SNE of Failed Prefixes - {task}", cmap='autumn', marker='x', save_path=os.path.join(task_path, f'tsne_failed_prefixes_{title}.png'), cbar_label='timestep')
+        visualize_tsne(np.vstack(failed_prefix_df['task_prefix_tsne']), np.vstack(failed_prefix_df['timestep'], dtype=int), title=f"t-SNE of Failed Prefixes - {task}", cmap='autumn', marker='x', save_path=os.path.join(task_path, f'tsne_failed_prefixes_{title}.png'), cbar_label='timestep')
 
         # visualize the prefix successful vs failed episode with t-SNE, coloring by timesteps
         visualize_success_vs_failed_episode_tsne(np.vstack(success_prefix_df['task_prefix_tsne']), np.vstack(success_prefix_df['timestep'], dtype=int), np.vstack(failed_prefix_df['task_prefix_tsne']), np.vstack(failed_prefix_df['timestep'], dtype=int), title=f"t-SNE of Successful vs Failed Prefixes - {task}", save_path=os.path.join(task_path, f'tsne_success_vs_failed_prefixes_{title}.png'), cbar_label1='timestep (success)', cbar_label2='timestep (failure)')
 
         # visualize the prefix successful episode with t-SNE, coloring by subgoal progress
-        visualize_episode_tsne(np.vstack(success_prefix_df['task_prefix_tsne']), np.vstack(success_prefix_df['chronological_encoded_subgoals'], dtype=int), title=f"t-SNE of Successful Prefixes - {task}", save_path=os.path.join(task_path, f'tsne_successful_prefixes_subgoals_{title}.png'), cbar_label='Subgoal Progress')
+        visualize_tsne(np.vstack(success_prefix_df['task_prefix_tsne']), np.vstack(success_prefix_df['chronological_encoded_subgoals'], dtype=int), title=f"t-SNE of Successful Prefixes - {task}", save_path=os.path.join(task_path, f'tsne_successful_prefixes_subgoals_{title}.png'), cbar_label='Subgoal Progress')
 
         # visualize the prefix failed episode with t-SNE, coloring by subgoal progress
         failed_prefix_df = task_df[task_df['success'] == False]
-        visualize_episode_tsne(np.vstack(failed_prefix_df['task_prefix_tsne']), np.vstack(failed_prefix_df['chronological_encoded_subgoals'], dtype=int), title=f"t-SNE of Failed Prefixes - {task}", cmap='autumn', marker='x', save_path=os.path.join(task_path, f'tsne_failed_prefixes_subgoals_{title}.png'), cbar_label='Subgoal Progress')
+        visualize_tsne(np.vstack(failed_prefix_df['task_prefix_tsne']), np.vstack(failed_prefix_df['chronological_encoded_subgoals'], dtype=int), title=f"t-SNE of Failed Prefixes - {task}", cmap='autumn', marker='x', save_path=os.path.join(task_path, f'tsne_failed_prefixes_subgoals_{title}.png'), cbar_label='Subgoal Progress')
 
         # visualize the prefix successful vs failed episode with t-SNE, coloring by subgoal progress
         visualize_success_vs_failed_episode_tsne(np.vstack(success_prefix_df['task_prefix_tsne']), np.vstack(success_prefix_df['chronological_encoded_subgoals'], dtype=int), np.vstack(failed_prefix_df['task_prefix_tsne']), np.vstack(failed_prefix_df['chronological_encoded_subgoals'], dtype=int), title=f"t-SNE of Successful vs Failed Prefixes - {task}", save_path=os.path.join(task_path, f'tsne_success_vs_failed_prefixes_subgoals_{title}.png'), cbar_label1='Subgoal Progress (success)', cbar_label2='Subgoal Progress (failure)')
 
         # visualize the suffix successful episode with t-SNE, coloring by timesteps
         success_suffix_df = task_df[task_df['success'] == True]
-        visualize_episode_tsne(np.vstack(success_suffix_df['task_suffix_tsne']), np.vstack(success_suffix_df['timestep'], dtype=int), title=f"t-SNE of Successful Suffixes - {task}", save_path=os.path.join(task_path, f'tsne_successful_suffixes_{title}.png'), cbar_label='timestep')
+        visualize_tsne(np.vstack(success_suffix_df['task_suffix_tsne']), np.vstack(success_suffix_df['timestep'], dtype=int), title=f"t-SNE of Successful Suffixes - {task}", save_path=os.path.join(task_path, f'tsne_successful_suffixes_{title}.png'), cbar_label='timestep')
 
         # visualize the suffix failed episode with t-SNE, coloring by timesteps
         failed_suffix_df = task_df[task_df['success'] == False]
-        visualize_episode_tsne(np.vstack(failed_suffix_df['task_suffix_tsne']), np.vstack(failed_suffix_df['timestep'], dtype=int), title=f"t-SNE of Failed Suffixes - {task}", cmap='autumn', marker='x', save_path=os.path.join(task_path, f'tsne_failed_suffixes_{title}.png'), cbar_label='timestep')
+        visualize_tsne(np.vstack(failed_suffix_df['task_suffix_tsne']), np.vstack(failed_suffix_df['timestep'], dtype=int), title=f"t-SNE of Failed Suffixes - {task}", cmap='autumn', marker='x', save_path=os.path.join(task_path, f'tsne_failed_suffixes_{title}.png'), cbar_label='timestep')
 
         # visualize the suffix successful vs failed episode with t-SNE, coloring by timesteps
         visualize_success_vs_failed_episode_tsne(np.vstack(success_suffix_df['task_suffix_tsne']), np.vstack(success_suffix_df['timestep'], dtype=int), np.vstack(failed_suffix_df['task_suffix_tsne']), np.vstack(failed_suffix_df['timestep'], dtype=int), title=f"t-SNE of Successful vs Failed Suffixes - {task}", save_path=os.path.join(task_path, f'tsne_success_vs_failed_suffixes_{title}.png'), cbar_label1='timestep (success)', cbar_label2='timestep (failure)')
@@ -384,20 +384,20 @@ def visualize_df_tsne(df, title=""):
     
     # visualize the prefix successful episode with t-SNE, coloring by timesteps
     success_prefix_df = df[df['success'] == True]
-    visualize_episode_tsne(np.vstack(success_prefix_df['combined_prefix_tsne']), np.vstack(success_prefix_df['timestep'], dtype=int), title=f"t-SNE of Successful Prefixes - All Tasks", save_path=os.path.join(data_dir, f'tsne_successful_prefixes_all_tasks_{title}.png'), cbar_label='timestep')
+    visualize_tsne(np.vstack(success_prefix_df['combined_prefix_tsne']), np.vstack(success_prefix_df['timestep'], dtype=int), title=f"t-SNE of Successful Prefixes - All Tasks", save_path=os.path.join(data_dir, f'tsne_successful_prefixes_all_tasks_{title}.png'), cbar_label='timestep')
 
     # visualize the prefix failed episode with t-SNE, coloring by timesteps
     failed_prefix_df = df[df['success'] == False]
-    visualize_episode_tsne(np.vstack(failed_prefix_df['combined_prefix_tsne']), np.vstack(failed_prefix_df['timestep'], dtype=int), title=f"t-SNE of Failed Prefixes - All Tasks", cmap='autumn', marker='x', save_path=os.path.join(data_dir, f'tsne_failed_prefixes_all_tasks_{title}.png'), cbar_label='timestep')
+    visualize_tsne(np.vstack(failed_prefix_df['combined_prefix_tsne']), np.vstack(failed_prefix_df['timestep'], dtype=int), title=f"t-SNE of Failed Prefixes - All Tasks", cmap='autumn', marker='x', save_path=os.path.join(data_dir, f'tsne_failed_prefixes_all_tasks_{title}.png'), cbar_label='timestep')
 
     # visualize the prefix successful vs failed episode with t-SNE, coloring by timesteps
     visualize_success_vs_failed_episode_tsne(np.vstack(success_prefix_df['combined_prefix_tsne']), np.vstack(success_prefix_df['timestep'], dtype=int), np.vstack(failed_prefix_df['combined_prefix_tsne']), np.vstack(failed_prefix_df['timestep'], dtype=int), title=f"t-SNE of Successful vs Failed Prefixes - All Tasks", save_path=os.path.join(data_dir, f'tsne_success_vs_failed_prefixes_all_tasks_{title}.png'), cbar_label1='timestep (success)', cbar_label2='timestep (failure)')
 
     # visualize the prefix successful episode with t-SNE, coloring by subgoal progress
-    visualize_episode_tsne(np.vstack(success_prefix_df['combined_prefix_tsne']), np.vstack(success_prefix_df['chronological_encoded_subgoals'], dtype=int), title=f"t-SNE of Successful Prefixes - All Tasks", save_path=os.path.join(data_dir, f'tsne_successful_prefixes_subgoals_all_tasks_{title}.png'), cbar_label='Subgoal Progress')
+    visualize_tsne(np.vstack(success_prefix_df['combined_prefix_tsne']), np.vstack(success_prefix_df['chronological_encoded_subgoals'], dtype=int), title=f"t-SNE of Successful Prefixes - All Tasks", save_path=os.path.join(data_dir, f'tsne_successful_prefixes_subgoals_all_tasks_{title}.png'), cbar_label='Subgoal Progress')
 
     # visualize the prefix failed episode with t-SNE, coloring by subgoal progress
-    visualize_episode_tsne(np.vstack(failed_prefix_df['combined_prefix_tsne']), np.vstack(failed_prefix_df['chronological_encoded_subgoals'], dtype=int), title=f"t-SNE of Failed Prefixes - All Tasks", cmap='autumn', marker='x', save_path=os.path.join(data_dir, f'tsne_failed_prefixes_subgoals_all_tasks_{title}.png'), cbar_label='Subgoal Progress')
+    visualize_tsne(np.vstack(failed_prefix_df['combined_prefix_tsne']), np.vstack(failed_prefix_df['chronological_encoded_subgoals'], dtype=int), title=f"t-SNE of Failed Prefixes - All Tasks", cmap='autumn', marker='x', save_path=os.path.join(data_dir, f'tsne_failed_prefixes_subgoals_all_tasks_{title}.png'), cbar_label='Subgoal Progress')
 
     # visualize the prefix successful vs failed episode with t-SNE, coloring by subgoal progress
     visualize_success_vs_failed_episode_tsne(np.vstack(success_prefix_df['combined_prefix_tsne']), np.vstack(success_prefix_df['chronological_encoded_subgoals'], dtype=int), np.vstack(failed_prefix_df['combined_prefix_tsne']), np.vstack(failed_prefix_df['chronological_encoded_subgoals'], dtype=int), title=f"t-SNE of Successful vs Failed Prefixes - All Tasks", save_path=os.path.join(data_dir, f'tsne_success_vs_failed_prefixes_subgoals_all_tasks_{title}.png'), cbar_label1='Subgoal Progress (success)', cbar_label2='Subgoal Progress (failure)')
@@ -405,25 +405,26 @@ def visualize_df_tsne(df, title=""):
 
     # visualize the suffix successful episode with t-SNE, coloring by timesteps
     success_suffix_df = df[df['success'] == True]
-    visualize_episode_tsne(np.vstack(success_suffix_df['combined_suffix_tsne']), np.vstack(success_suffix_df['timestep'], dtype=int), title=f"t-SNE of Successful Suffixes - All Tasks", save_path=os.path.join(data_dir, f'tsne_successful_suffixes_all_tasks_{title}.png'), cbar_label='timestep')
+    visualize_tsne(np.vstack(success_suffix_df['combined_suffix_tsne']), np.vstack(success_suffix_df['timestep'], dtype=int), title=f"t-SNE of Successful Suffixes - All Tasks", save_path=os.path.join(data_dir, f'tsne_successful_suffixes_all_tasks_{title}.png'), cbar_label='timestep')
 
     # visualize the suffix failed episode with t-SNE, coloring by timesteps
     failed_suffix_df = df[df['success'] == False]
-    visualize_episode_tsne(np.vstack(failed_suffix_df['combined_suffix_tsne']), np.vstack(failed_suffix_df['timestep'], dtype=int), title=f"t-SNE of Failed Suffixes - All Tasks", cmap='autumn', marker='x', save_path=os.path.join(data_dir, f'tsne_failed_suffixes_all_tasks_{title}.png'), cbar_label='timestep')
+    visualize_tsne(np.vstack(failed_suffix_df['combined_suffix_tsne']), np.vstack(failed_suffix_df['timestep'], dtype=int), title=f"t-SNE of Failed Suffixes - All Tasks", cmap='autumn', marker='x', save_path=os.path.join(data_dir, f'tsne_failed_suffixes_all_tasks_{title}.png'), cbar_label='timestep')
 
     # visualize the suffix successful vs failed episode with t-SNE, coloring by timesteps
     visualize_success_vs_failed_episode_tsne(np.vstack(success_suffix_df['combined_suffix_tsne']), np.vstack(success_suffix_df['timestep'], dtype=int), np.vstack(failed_suffix_df['combined_suffix_tsne']), np.vstack(failed_suffix_df['timestep'], dtype=int), title=f"t-SNE of Successful vs Failed Suffixes - All Tasks", save_path=os.path.join(data_dir, f'tsne_success_vs_failed_suffixes_all_tasks_{title}.png'), cbar_label1='timestep (success)', cbar_label2='timestep (failure)')
 
     # visualize the suffix successful episode with t-SNE, coloring by subgoal progress
-    visualize_episode_tsne(np.vstack(success_suffix_df['combined_suffix_tsne']), np.vstack(success_suffix_df['chronological_encoded_subgoals'], dtype=int), title=f"t-SNE of Successful Suffixes - All Tasks", save_path=os.path.join(data_dir, f'tsne_successful_suffixes_subgoals_all_tasks_{title}.png'), cbar_label='Subgoal Progress')
+    visualize_tsne(np.vstack(success_suffix_df['combined_suffix_tsne']), np.vstack(success_suffix_df['chronological_encoded_subgoals'], dtype=int), title=f"t-SNE of Successful Suffixes - All Tasks", save_path=os.path.join(data_dir, f'tsne_successful_suffixes_subgoals_all_tasks_{title}.png'), cbar_label='Subgoal Progress')
 
     # visualize the suffix failed episode with t-SNE, coloring by subgoal progress
-    visualize_episode_tsne(np.vstack(failed_suffix_df['combined_suffix_tsne']), np.vstack(failed_suffix_df['chronological_encoded_subgoals'], dtype=int), title=f"t-SNE of Failed Suffixes - All Tasks", cmap='autumn', marker='x', save_path=os.path.join(data_dir, f'tsne_failed_suffixes_subgoals_all_tasks_{title}.png'), cbar_label='Subgoal Progress')
+    visualize_tsne(np.vstack(failed_suffix_df['combined_suffix_tsne']), np.vstack(failed_suffix_df['chronological_encoded_subgoals'], dtype=int), title=f"t-SNE of Failed Suffixes - All Tasks", cmap='autumn', marker='x', save_path=os.path.join(data_dir, f'tsne_failed_suffixes_subgoals_all_tasks_{title}.png'), cbar_label='Subgoal Progress')
 
     # visualize the suffix successful vs failed episode with t-SNE, coloring by subgoal progress
     visualize_success_vs_failed_episode_tsne(np.vstack(success_suffix_df['combined_suffix_tsne']), np.vstack(success_suffix_df['chronological_encoded_subgoals'], dtype=int), np.vstack(failed_suffix_df['combined_suffix_tsne']), np.vstack(failed_suffix_df['chronological_encoded_subgoals'], dtype=int), title=f"t-SNE of Successful vs Failed Suffixes - All Tasks", save_path=os.path.join(data_dir, f'tsne_success_vs_failed_suffixes_subgoals_all_tasks_{title}.png'), cbar_label1='Subgoal Progress (success)', cbar_label2='Subgoal Progress (failure)')
 
-
+#%
+#rename_episode_folder()
 
 # %% load a few steps to see what the data looks like
 # load a task
@@ -489,18 +490,18 @@ for task in task_list:
     failed_tsne_points = tnse_points[successful_episode_prefixes.shape[0]:]
 
     # visualize the successful episode with t-SNE, coloring by timesteps
-    visualize_episode_tsne(successful_tsne_points, successful_timesteps, title=f"t-SNE of successful {task} prefixes", save_path=os.path.join(task_path, 'tsne_successful_prefixes_timesteps.png'), cbar_label='Timestep')
+    visualize_tsne(successful_tsne_points, successful_timesteps, title=f"t-SNE of successful {task} prefixes", save_path=os.path.join(task_path, 'tsne_successful_prefixes_timesteps.png'), cbar_label='Timestep')
 
     # visualize the successful episode with t-SNE, coloring by subgoal progress
-    visualize_episode_tsne(successful_tsne_points, successful_subgoals, title=f"t-SNE of successful {task} prefixes", save_path=os.path.join(task_path, 'tsne_successful_prefixes_subgoals.png'), cbar_label='Subgoal Progress')
+    visualize_tsne(successful_tsne_points, successful_subgoals, title=f"t-SNE of successful {task} prefixes", save_path=os.path.join(task_path, 'tsne_successful_prefixes_subgoals.png'), cbar_label='Subgoal Progress')
 
 
     if failed_tsne_points.size != 0:
         # visualize the failed episode with t-SNE, coloring by timesteps
-        visualize_episode_tsne(failed_tsne_points, failed_timesteps, title=f"t-SNE of failed {task} prefixes", save_path=os.path.join(task_path, 'tsne_failed_prefixes_timesteps.png'), cmap="autumn", marker='x', cbar_label='Timestep')
+        visualize_tsne(failed_tsne_points, failed_timesteps, title=f"t-SNE of failed {task} prefixes", save_path=os.path.join(task_path, 'tsne_failed_prefixes_timesteps.png'), cmap="autumn", marker='x', cbar_label='Timestep')
 
         # visualize the failed episode with t-SNE, coloring by subgoal progress
-        visualize_episode_tsne(failed_tsne_points, failed_subgoals, title=f"t-SNE of failed {task} prefixes", save_path=os.path.join(task_path, 'tsne_failed_prefixes_subgoals.png'), cmap="autumn", marker='x', cbar_label='Subgoal Progress')
+        visualize_tsne(failed_tsne_points, failed_subgoals, title=f"t-SNE of failed {task} prefixes", save_path=os.path.join(task_path, 'tsne_failed_prefixes_subgoals.png'), cmap="autumn", marker='x', cbar_label='Subgoal Progress')
 
         # visualize both successful and failed episodes together with different markers colored by timesteps
         visualize_success_vs_failed_episode_tsne(successful_tsne_points, successful_timesteps, failed_tsne_points, failed_timesteps, title=f"t-SNE of {task} Prefix Success vs Failure", save_path=os.path.join(task_path, 'tsne_success_vs_failure_prefixes_timesteps.png'), cbar_label1='Timestep (Success)', cbar_label2='Timestep (Failure)')
@@ -518,19 +519,19 @@ all_failed_tsne_points = all_tsne_points[all_successful_prefixes_concat.shape[0]
 
 # visualize all successful prefixes with t-SNE, coloring by timesteps
 all_successful_timesteps_concat = np.concatenate(all_success_timesteps, axis=0)
-visualize_episode_tsne(all_success_tsne_points, all_successful_timesteps_concat, title="t-SNE of all successful prefixes", save_path=os.path.join(data_dir, 'tsne_all_successful_prefixes_timesteps.png'), cbar_label='Timestep')
+visualize_tsne(all_success_tsne_points, all_successful_timesteps_concat, title="t-SNE of all successful prefixes", save_path=os.path.join(data_dir, 'tsne_all_successful_prefixes_timesteps.png'), cbar_label='Timestep')
 
 # visualize all successful prefixes with t-SNE, coloring by subgoal progress
 all_successful_subgoals_concat = np.concatenate(all_success_subgoals, axis=0)
-visualize_episode_tsne(all_success_tsne_points, all_successful_subgoals_concat, title="t-SNE of all successful prefixes", save_path=os.path.join(data_dir, 'tsne_all_successful_prefixes_subgoals.png'), cbar_label='Subgoal Progress')
+visualize_tsne(all_success_tsne_points, all_successful_subgoals_concat, title="t-SNE of all successful prefixes", save_path=os.path.join(data_dir, 'tsne_all_successful_prefixes_subgoals.png'), cbar_label='Subgoal Progress')
 
 # visualize all failed prefixes with t-SNE, coloring by timesteps
 all_failed_timesteps_concat = np.concatenate(all_failed_timesteps, axis=0)
-visualize_episode_tsne(all_failed_tsne_points, all_failed_timesteps_concat, title="t-SNE of all failed prefixes", save_path=os.path.join(data_dir, 'tsne_all_failed_prefixes_timesteps.png'), cbar_label='Timestep')
+visualize_tsne(all_failed_tsne_points, all_failed_timesteps_concat, title="t-SNE of all failed prefixes", save_path=os.path.join(data_dir, 'tsne_all_failed_prefixes_timesteps.png'), cbar_label='Timestep')
 
 # visualize all failed prefixes with t-SNE, coloring by subgoal progress
 all_failed_subgoals_concat = np.concatenate(all_failed_subgoals, axis=0)
-visualize_episode_tsne(all_failed_tsne_points, all_failed_subgoals_concat, title="t-SNE of all failed prefixes", save_path=os.path.join(data_dir, 'tsne_all_failed_prefixes_subgoals.png'), cbar_label='Subgoal Progress')
+visualize_tsne(all_failed_tsne_points, all_failed_subgoals_concat, title="t-SNE of all failed prefixes", save_path=os.path.join(data_dir, 'tsne_all_failed_prefixes_subgoals.png'), cbar_label='Subgoal Progress')
 
 # visualize both successful and failed prefixes together with different markers colored by timesteps
 visualize_success_vs_failed_episode_tsne(all_success_tsne_points, all_successful_timesteps_concat, all_failed_tsne_points, all_failed_timesteps_concat, title="t-SNE of all Prefix Success vs Failure", save_path=os.path.join(data_dir, 'tsne_all_success_vs_failure_prefixes_timesteps.png'), cbar_label1='Timestep (Success)', cbar_label2='Timestep (Failure)')
@@ -585,17 +586,17 @@ for task in task_list:
     successful_tsne_points = tnse_points[:successful_suffixes.shape[0]]
     failed_tsne_points = tnse_points[successful_suffixes.shape[0]:]
     # visualize the successful episode with t-SNE, coloring by timesteps
-    visualize_episode_tsne(successful_tsne_points, successful_timesteps, title=f"t-SNE of successful {task}", save_path=os.path.join(task_path, 'tsne_successful_suffix_timesteps.png'), cbar_label='Timestep')
+    visualize_tsne(successful_tsne_points, successful_timesteps, title=f"t-SNE of successful {task}", save_path=os.path.join(task_path, 'tsne_successful_suffix_timesteps.png'), cbar_label='Timestep')
 
     # visualize the successful episode with t-SNE, coloring by subgoal progress
-    visualize_episode_tsne(successful_tsne_points, successful_subgoals, title=f"t-SNE of successful {task}", save_path=os.path.join(task_path, 'tsne_successful_suffix_subgoals.png'), cbar_label='Subgoal Progress')
+    visualize_tsne(successful_tsne_points, successful_subgoals, title=f"t-SNE of successful {task}", save_path=os.path.join(task_path, 'tsne_successful_suffix_subgoals.png'), cbar_label='Subgoal Progress')
 
     # visualize the failed episode with t-SNE
     if failed_tsne_points.size != 0:
-        visualize_episode_tsne(failed_tsne_points, failed_timesteps, title=f"t-SNE of failed {task}", save_path=os.path.join(task_path, 'tsne_failed_suffix_timesteps.png'), cmap="autumn", marker='x', cbar_label='Timestep')
+        visualize_tsne(failed_tsne_points, failed_timesteps, title=f"t-SNE of failed {task}", save_path=os.path.join(task_path, 'tsne_failed_suffix_timesteps.png'), cmap="autumn", marker='x', cbar_label='Timestep')
 
         # visualize the failed episode with t-SNE, coloring by subgoal progress
-        visualize_episode_tsne(failed_tsne_points, failed_subgoals, title=f"t-SNE of failed {task}", save_path=os.path.join(task_path, 'tsne_failed_suffix_subgoals.png'), cmap="autumn", marker='x', cbar_label='Subgoal Progress')
+        visualize_tsne(failed_tsne_points, failed_subgoals, title=f"t-SNE of failed {task}", save_path=os.path.join(task_path, 'tsne_failed_suffix_subgoals.png'), cmap="autumn", marker='x', cbar_label='Subgoal Progress')
 
         # visualize both successful and failed episodes together with different markers
         visualize_success_vs_failed_episode_tsne(successful_tsne_points, successful_timesteps, failed_tsne_points, failed_timesteps, title=f"t-SNE of {task} Success vs Failure", save_path=os.path.join(task_path, 'tsne_success_vs_failure_suffix_timesteps.png'), cbar_label1='Timestep (Success)', cbar_label2='Timestep (Failure)')
@@ -621,16 +622,16 @@ successful_tsne_points = all_tsne_points[:all_successful_suffixes_concat.shape[0
 failed_tsne_points = all_tsne_points[all_successful_suffixes_concat.shape[0]:]
 
 # visualize the successful episode with t-SNE, coloring by timesteps
-visualize_episode_tsne(successful_tsne_points, all_successful_timesteps_concat, title="t-SNE of all successful episodes", save_path=os.path.join(data_dir, 'tsne_all_successful_suffix_timesteps.png'), cbar_label='Timestep')
+visualize_tsne(successful_tsne_points, all_successful_timesteps_concat, title="t-SNE of all successful episodes", save_path=os.path.join(data_dir, 'tsne_all_successful_suffix_timesteps.png'), cbar_label='Timestep')
 
 # visualize the successful episode with t-SNE, coloring by subgoal progress
-visualize_episode_tsne(successful_tsne_points, all_successful_subgoals_concat, title="t-SNE of all successful episodes", save_path=os.path.join(data_dir, 'tsne_all_successful_suffix_subgoals.png'), cbar_label='Subgoal Progress')
+visualize_tsne(successful_tsne_points, all_successful_subgoals_concat, title="t-SNE of all successful episodes", save_path=os.path.join(data_dir, 'tsne_all_successful_suffix_subgoals.png'), cbar_label='Subgoal Progress')
 
 # visualize the failed episode with t-SNE
-visualize_episode_tsne(failed_tsne_points, all_failed_timesteps_concat, title="t-SNE of all failed episodes", save_path=os.path.join(data_dir, 'tsne_all_failed_suffix_timesteps.png'), cmap="autumn", marker='x', cbar_label='Timestep')
+visualize_tsne(failed_tsne_points, all_failed_timesteps_concat, title="t-SNE of all failed episodes", save_path=os.path.join(data_dir, 'tsne_all_failed_suffix_timesteps.png'), cmap="autumn", marker='x', cbar_label='Timestep')
 
 # visualize the failed episode with t-SNE, coloring by subgoal progress
-visualize_episode_tsne(failed_tsne_points, all_failed_subgoals_concat, title="t-SNE of all failed episodes", save_path=os.path.join(data_dir, 'tsne_all_failed_suffix_subgoals.png'), cmap="autumn", marker='x', cbar_label='Subgoal Progress')
+visualize_tsne(failed_tsne_points, all_failed_subgoals_concat, title="t-SNE of all failed episodes", save_path=os.path.join(data_dir, 'tsne_all_failed_suffix_subgoals.png'), cmap="autumn", marker='x', cbar_label='Subgoal Progress')
 
 # visualize both successful and failed episodes together with different markers
 visualize_success_vs_failed_episode_tsne(successful_tsne_points, all_successful_timesteps_concat, failed_tsne_points, all_failed_timesteps_concat, title="t-SNE of all Success vs Failure", save_path=os.path.join(data_dir, 'tsne_all_success_vs_failure_suffix_timesteps.png'), cbar_label1='Timestep (Success)', cbar_label2='Timestep (Failure)')
@@ -702,4 +703,36 @@ visualize_df_tsne(df_last_10, title='last_10%_steps')
 # filter the df for failed last 25% steps and all successful steps
 df_failed_last_25 = df[(df['progress'] >= 0.75) & (df['success'] == False) | (df['success'] == True)]
 visualize_df_tsne(df_failed_last_25, title='failed_last_25%_steps')
+# %% assign each task a task id, and add a column to the dataframe
+task_id_map = {task: idx for idx, task in enumerate(task_list)}
+df['task_id'] = df['task_name'].map(task_id_map)
+
+
+# %% visualize all prefixes and suffixes with t-SNE, coloring by task id
+# get all prefix as a np.array
+all_prefixes = np.vstack(df['masked_meanpooled_prefix'].values)
+all_prefixes_tsne = t_SNE(all_prefixes)
+all_prefixes_tsne.shape
+all_task_ids = df['task_id'].values
+all_task_ids.shape
+visualize_tsne(all_prefixes_tsne, all_task_ids, title="t-SNE of All Prefixes Colored by Task ID", save_path=os.path.join(data_dir, 'tsne_all_prefixes_task_id.png'), cbar_label='Task ID', cmap='tab20')
+# %%  visualize all suffixes and suffixes with t-SNE, coloring by task id
+all_suffixes = np.vstack(df['suffix'].values)
+all_suffixes_tsne = t_SNE(all_suffixes)
+all_suffixes_tsne.shape
+visualize_tsne(all_suffixes_tsne, all_task_ids, title="t-SNE of All Suffixes Colored by Task ID", save_path=os.path.join(data_dir, 'tsne_all_suffixes_task_id.png'), cbar_label='Task ID', cmap='tab20')
+# %% visualize all prefixes of the first query to the model with t-SNE, coloring by task id
+df_timestep_0 = df[df['timestep'] == 10]
+all_prefixes_t0 = np.vstack(df_timestep_0['masked_meanpooled_prefix'].values)
+all_prefixes_t0_tsne = t_SNE(all_prefixes_t0)
+all_prefixes_t0_tsne.shape
+all_task_ids_t0 = df_timestep_0['task_id'].values
+visualize_tsne(all_prefixes_t0_tsne, all_task_ids_t0, title="t-SNE of All Prefixes at Timestep 10 Colored by Task ID", save_path=os.path.join(data_dir, 'tsne_all_prefixes_timestep_10_task_id.png'), cbar_label='Task ID', cmap='tab20')
+
+# %% visualize all suffixes of the first query to the model with t-SNE, coloring by task id
+all_suffixes_t0 = np.vstack(df_timestep_0['suffix'].values)
+all_suffixes_t0_tsne = t_SNE(all_suffixes_t0)
+all_suffixes_t0_tsne.shape
+visualize_tsne(all_suffixes_t0_tsne, all_task_ids_t0, title="t-SNE of All Suffixes at Timestep 10 Colored by Task ID", save_path=os.path.join(data_dir, 'tsne_all_suffixes_timestep_10_task_id.png'), cbar_label='Task ID', cmap='tab20')
+
 # %%
