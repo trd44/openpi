@@ -52,7 +52,6 @@ class Policy(BasePolicy):
         """
         self.model = model
         self._sample_actions = nnx_utils.module_jit(model.sample_actions)
-        #self._sample_actions = model.sample_actions
         self._input_transform = _transforms.compose(transforms)
         self._output_transform = _transforms.compose(output_transforms)
         self._sample_kwargs = sample_kwargs or {}
@@ -68,6 +67,7 @@ class Policy(BasePolicy):
             # JAX model setup
             self._sample_actions = nnx_utils.module_jit(model.sample_actions)
             self._rng = rng or jax.random.key(0)
+        # self._sample_actions = model.sample_actions
 
     @override
     def infer(self, obs: dict, *, noise: np.ndarray | None = None) -> dict:  # type: ignore[misc]
@@ -95,18 +95,17 @@ class Policy(BasePolicy):
         observation = _model.Observation.from_dict(inputs)
         start_time = time.monotonic()
         out_dict = self._sample_actions(
-            sample_rng,
-            _model.Observation.from_dict(inputs),
+            rng=sample_rng_or_pytorch_device,
+            observation=observation,
             **self._sample_kwargs,
         )
         outputs = {
             "state": inputs["state"],
             **out_dict,
-            "actions": self._sample_actions(sample_rng_or_pytorch_device, observation, **sample_kwargs),
+            #"actions": self._sample_actions(sample_rng_or_pytorch_device, observation, **sample_kwargs),
         }
         # check if model is a Pi0 model and unbatch and convert to np.ndarray. 
         
-        outputs = jax.tree.map(lambda x: np.asarray(x[0, ...]), outputs)
         model_time = time.monotonic() - start_time
         if self._is_pytorch_model:
             outputs = jax.tree.map(lambda x: np.asarray(x[0, ...].detach().cpu()), outputs)

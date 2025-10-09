@@ -252,7 +252,7 @@ class Pi0(_model.BaseModel):
             def aggregate_hori_get_final(suffix_out):
                 return suffix_out[:, -self.action_horizon :][:, -1, :]
             x_t, time, suffix_out_aggregated, track_suffix = carry
-            suffix_tokens, suffix_mask, suffix_ar_mask = self.embed_suffix(
+            suffix_tokens, suffix_mask, suffix_ar_mask, adarms_cond = self.embed_suffix(
                 observation, x_t, jnp.broadcast_to(time, batch_size)
             )
             # `suffix_attn_mask` is shape (b, suffix_len, suffix_len) indicating how the suffix tokens can attend to each
@@ -280,6 +280,7 @@ class Pi0(_model.BaseModel):
                 adarms_cond=[None, adarms_cond],
             )
             assert prefix_out is None
+            v_t = self.action_out_proj(suffix_out[:, -self.action_horizon :])
 
             suffix_out_aggregated = jax.lax.cond(
                 track_suffix,
@@ -288,10 +289,9 @@ class Pi0(_model.BaseModel):
                     lambda: aggregate_hori_get_initial(suffix_out),
                     lambda: aggregate_hori_get_final(suffix_out)
                 ),
-                # if not tracking suffix, return the aggregated suffix_out as empty array the same size as the suffix_out
+                # if not tracking suffix, return the aggregated suffix_out as empty array the same size as the suffix_out_aggregated
                 lambda: jnp.zeros_like(suffix_out[:, 0, :], dtype=suffix_out.dtype)
             )
-            v_t = self.action_out_proj(suffix_out[:, -self.action_horizon :])
 
             # return the suffix_out collected so far and the next time step
             return x_t + dt * v_t, time + dt, suffix_out_aggregated, track_suffix
