@@ -66,13 +66,13 @@ class Args:
     # --- Policy Interaction ---
     resize_size: int = 224           # Target size for image resizing (must match model training)
     replan_steps: int = 50           # Number of steps per action chunk from policy server
-    use_sequential_tasks: bool = True # If True, use sequential task prompts; if False, use single prompt
+    use_sequential_tasks: bool =False # If True, use sequential task prompts; if False, use single prompt
     time_based_progression: bool = False # If True, advance to next task after task_timeout steps regardless of completion
     task_timeout: int = 750          # Number of steps to wait before timing out a task
 
     # --- Robosuite Environment ---
-    env_name: str = "Hanoi4x3" 
-    env: str = "Hanoi4x3"                # Environment name for RecordDemos compatibility
+    env_name: str = "Hanoi" 
+    env: str = "Hanoi"                # Environment name for RecordDemos compatibility
     robots: str = "Panda"           # Robot model to use
     controller: str = "OSC_POSE"    # Robosuite controller name
     horizon: int = 7050             # Max steps per episode
@@ -91,13 +91,18 @@ class Args:
         ) # Cameras for observation/video
     camera_height: int = 256 # Rendered camera height (before potential resize)
     camera_width: int = 256 # Rendered camera width (before potential resize)
+    
+    # --- Full Resolution Video Recording ---
+    save_full_res_video: bool = True # Save full resolution videos alongside model observations
+    full_res_height: int = 480 # Full resolution video height
+    full_res_width: int = 640  # Full resolution video width
     required_cameras: List[str] = dataclasses.field(
         default_factory=lambda: ["agentview", "robot0_eye_in_hand"]
         ) # Required cameras for OpenPI preprocessing
 
     # --- Misc ---
     seed: int = 3           #: Random seed
-    episodes: int = 50      #: How many episodes to run back-to-back
+    episodes: int = 10      #: How many episodes to run back-to-back
 
     # --- Logging ---
     wandb_project: str = "FINAL_pi0_hanoi_300_one_task_4_blocks"   #: W&B project name
@@ -1154,6 +1159,15 @@ def run_robosuite_with_openpi(args: Args) -> None:
         pathlib.Path(args.video_out_path).mkdir(parents=True, exist_ok=True)
         frames = []
         
+        # Setup full resolution video recording if enabled
+        full_res_frames = []
+        full_res_wrist_frames = []
+        if args.save_full_res_video:
+            full_res_filename = video_filename.replace('.mp4', '_full_res.mp4')
+            full_res_wrist_filename = video_filename.replace('.mp4', '_full_res_wrist.mp4')
+            full_res_video_path = pathlib.Path(args.video_out_path) / full_res_filename
+            full_res_wrist_video_path = pathlib.Path(args.video_out_path) / full_res_wrist_filename
+        
         # Reset environment
         try:
             obs = env_manager.reset()
@@ -1217,6 +1231,22 @@ def run_robosuite_with_openpi(args: Args) -> None:
             try:
                 processed_obs = obs_preprocessor.preprocess_observations(obs)
                 frames.append(processed_obs["image"])
+                
+                # Capture full resolution frames for video recording if enabled
+                if args.save_full_res_video:
+                    full_res_frame = env_manager.env.sim.render(
+                        width=args.full_res_width, 
+                        height=args.full_res_height, 
+                        camera_name="agentview"
+                    )
+                    full_res_wrist_frame = env_manager.env.sim.render(
+                        width=args.full_res_width, 
+                        height=args.full_res_height, 
+                        camera_name="robot0_eye_in_hand"
+                    )
+                    full_res_frames.append(full_res_frame)
+                    full_res_wrist_frames.append(full_res_wrist_frame)
+                    
             except Exception as e:
                 logging.error(f"Error during preprocessing at step {t}: {e}")
                 break
@@ -1416,16 +1446,38 @@ def run_robosuite_with_openpi(args: Args) -> None:
             steps_on_current_task = t - task_manager.task_start_step
             logging.info(f"Progress tracking: Episode started at step {task_manager.episode_start_step}, last progress at step {task_manager.last_progress_step}, current task: {current_task_num}, steps on current task: {steps_on_current_task}")
         
-        # Save video
+        # Save videos
         if frames:
-            logging.info(f"Saving video ({len(frames)} frames) to {video_full_path}...")
+            logging.info(f"Saving model observation video ({len(frames)} frames) to {video_full_path}...")
             try:
                 imageio.mimwrite(str(video_full_path), frames, fps=env_manager.env.control_freq)
-                logging.info("Video saved.")
+                logging.info("Model observation video saved.")
             except Exception as e:
-                logging.error(f"Failed to save video: {e}")
+                logging.error(f"Failed to save model observation video: {e}")
         else:
-            logging.warning("No frames collected for video.")
+            logging.warning("No frames collected for model observation video.")
+            
+        # Save full resolution videos if enabled
+        if args.save_full_res_video and full_res_frames:
+            logging.info(f"Saving full resolution agentview video ({len(full_res_frames)} frames) to {full_res_video_path}...")
+            try:
+                # Flip frames vertically to fix upside-down issue (same as in dataset_making)
+                flipped_frames = [np.flipud(frame) for frame in full_res_frames]
+                imageio.mimwrite(str(full_res_video_path), flipped_frames, fps=env_manager.env.control_freq, macro_block_size=None)
+                logging.info("Full resolution agentview video saved.")
+            except Exception as e:
+                logging.error(f"Failed to save full resolution agentview video: {e}")
+                
+            logging.info(f"Saving full resolution wrist video ({len(full_res_wrist_frames)} frames) to {full_res_wrist_video_path}...")
+            try:
+                # Flip frames vertically to fix upside-down issue
+                flipped_wrist_frames = [np.flipud(frame) for frame in full_res_wrist_frames]
+                imageio.mimwrite(str(full_res_wrist_video_path), flipped_wrist_frames, fps=env_manager.env.control_freq, macro_block_size=None)
+                logging.info("Full resolution wrist video saved.")
+            except Exception as e:
+                logging.error(f"Failed to save full resolution wrist video: {e}")
+        elif args.save_full_res_video:
+            logging.warning("Full resolution video recording enabled but no frames collected.")
         
         # W&B summary and finish
         for idx, count in enumerate(task_manager.task_totals, 1):
