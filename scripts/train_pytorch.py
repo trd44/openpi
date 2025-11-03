@@ -90,6 +90,21 @@ def init_wandb(config: _config.TrainConfig, *, resuming: bool, enabled: bool = T
         )
         (ckpt_dir / "wandb_id.txt").write_text(wandb.run.id)
 
+def read_rapl_energy():
+    """Reads CPU package energy in joules from RAPL sysfs."""
+    rapl_files = glob.glob("/sys/class/powercap/intel-rapl:0:0/energy_uj")
+    if not rapl_files:
+        # Try alternative path
+        rapl_files = glob.glob("/sys/class/powercap/intel-rapl/intel-rapl:0/energy_uj")
+    if not rapl_files:
+        return None  # RAPL not available on this system
+    try:
+        with open(rapl_files[0], "r") as f:
+            energy_uj = int(f.read().strip())
+        return energy_uj / 1_000_000  # convert microjoules to joules
+    except (IOError, ValueError, PermissionError) as e:
+        logging.warning(f"Could not read RAPL energy: {e}")
+        return None
 
 def setup_ddp():
     world_size = int(os.environ.get("WORLD_SIZE", "1"))
@@ -481,6 +496,16 @@ def train_loop(config: _config.TrainConfig):
 
     model.train()
     start_time = time.time()
+
+    # Initialize CPU power monitoring
+    cpu_energy_start = read_rapl_energy()
+    cpu_time_start = time.time()
+    cpu_power_available = cpu_energy_start is not None
+    if cpu_power_available:
+        logging.info("CPU power monitoring enabled via RAPL")
+    else:
+        logging.info("CPU power monitoring not available (RAPL not found or not accessible)")
+
     infos = []  # Collect stats over log interval
     if is_main:
         logging.info(
@@ -567,6 +592,23 @@ def train_loop(config: _config.TrainConfig):
 
             if is_main and (global_step % config.log_interval == 0):
                 elapsed = time.time() - start_time
+
+                # Calculate CPU power if available
+                if cpu_power_available:
+                    cpu_energy_end = read_rapl_energy()
+                    cpu_time_end = time.time()
+                    if cpu_energy_end is not None:
+                        elapsed_time = cpu_time_end - cpu_time_start
+                        energy_consumed = cpu_energy_end - cpu_energy_start
+                        # Handle RAPL counter wraparound (counter is typically 32-bit or 64-bit)
+                        if energy_consumed < 0:
+                            logging.warning(f"RAPL counter wraparound detected, skipping CPU power measurement")
+                        else:
+                            cpu_power_watts = energy_consumed / elapsed_time
+                            infos.append({"cpu_power_watts": cpu_power_watts})
+                        # Update for next interval
+                        cpu_energy_start = cpu_energy_end
+                        cpu_time_start = cpu_time_end
 
                 # Average stats over log interval
                 avg_loss = sum(info["loss"] for info in infos) / len(infos)
