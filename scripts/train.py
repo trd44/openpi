@@ -52,24 +52,23 @@ def init_logging():
     logger.handlers[0].setFormatter(formatter)
 
 def read_rapl_energy():
-    """Reads CPU package energy in joules from RAPL sysfs."""
+    """Reads CPU package energy in joules from RAPL sysfs. Returns None if not available."""
     rapl_files = glob.glob("/sys/class/powercap/intel-rapl:0/energy_uj")
     if not rapl_files:
         rapl_files = glob.glob("/sys/class/powercap/intel-rapl:0:0/energy_uj")
     if not rapl_files:
         rapl_files = glob.glob("/sys/class/powercap/intel-rapl:*/energy_uj")
     if not rapl_files:
-        raise RuntimeError("No RAPL energy file found. Are you on an Intel CPU?")
+        return None
     
     try:
         # Use the first file found
         with open(rapl_files[0], "r") as f:
             energy_uj = int(f.read().strip())
-    except IOError as e:
-        raise RuntimeError(f"Could not read RAPL file: {rapl_files[0]}. "
-                           f"Did you set permissions (udev rule)? Error: {e}")
-    
-    return energy_uj / 1_000_000  # convert microjoules to joules
+        return energy_uj / 1_000_000  # convert microjoules to joules
+    except (IOError, PermissionError) as e:
+        # Silently return None if we can't read the file (permissions issue)
+        return None
 
 # def average_cpu_power(duration_sec=60, sample_interval=1.0):
 #     """Computes average CPU package power over a period in seconds."""
@@ -329,7 +328,8 @@ def main(config: _config.TrainConfig):
             cpu_power = get_cpu_power_usage()
             cpu_energy = read_rapl_energy()
             reduced_info['cpu_power_watts'] = cpu_power
-            reduced_info['cpu_energy_joules'] = cpu_energy
+            if cpu_energy is not None:
+                reduced_info['cpu_energy_joules'] = cpu_energy
             info_str = ", ".join(f"{k}={v:.4f}" for k, v in reduced_info.items())
             pbar.write(f"Step {step}: {info_str}")
             wandb.log(reduced_info, step=step)
