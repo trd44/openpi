@@ -4,6 +4,7 @@ import logging
 import platform
 import subprocess
 import time
+import glob
 from typing import Any
 
 import psutil
@@ -50,6 +51,41 @@ def init_logging():
     logger.setLevel(logging.INFO)
     logger.handlers[0].setFormatter(formatter)
 
+def read_rapl_energy():
+    """Reads CPU package energy in joules from RAPL sysfs."""
+    rapl_files = glob.glob("/sys/class/powercap/intel-rapl:0/energy_uj")
+    if not rapl_files:
+        rapl_files = glob.glob("/sys/class/powercap/intel-rapl:0:0/energy_uj")
+    if not rapl_files:
+        rapl_files = glob.glob("/sys/class/powercap/intel-rapl:*/energy_uj")
+    if not rapl_files:
+        raise RuntimeError("No RAPL energy file found. Are you on an Intel CPU?")
+    
+    try:
+        # Use the first file found
+        with open(rapl_files[0], "r") as f:
+            energy_uj = int(f.read().strip())
+    except IOError as e:
+        raise RuntimeError(f"Could not read RAPL file: {rapl_files[0]}. "
+                           f"Did you set permissions (udev rule)? Error: {e}")
+    
+    return energy_uj / 1_000_000  # convert microjoules to joules
+
+# def average_cpu_power(duration_sec=60, sample_interval=1.0):
+#     """Computes average CPU package power over a period in seconds."""
+#     samples = []
+#     start_energy = read_rapl_energy()
+#     start_time = time.time()
+
+#     while (time.time() - start_time) < duration_sec:
+#         time.sleep(sample_interval)
+#         samples.append(read_rapl_energy())
+
+#     end_energy = samples[-1]
+#     avg_power = (end_energy - start_energy) / duration_sec
+#     print(f"start energy is {start_energy}, end energy is {end_energy}")
+#     print(f"duration sec is {duration_sec}")
+#     print(f"Average CPU package power over {duration_sec}s: {avg_power:.2f} W")
 
 def get_cpu_power_usage():
     """Get CPU power usage estimation based on frequency and utilization."""
@@ -291,8 +327,9 @@ def main(config: _config.TrainConfig):
             
             # Add CPU power to existing metrics
             cpu_power = get_cpu_power_usage()
+            cpu_energy = read_rapl_energy()
             reduced_info['cpu_power_watts'] = cpu_power
-            
+            reduced_info['cpu_energy_joules'] = cpu_energy
             info_str = ", ".join(f"{k}={v:.4f}" for k, v in reduced_info.items())
             pbar.write(f"Step {step}: {info_str}")
             wandb.log(reduced_info, step=step)
