@@ -32,6 +32,15 @@ from planning.planner import add_predicates_to_pddl, call_planner
 from openpi_client import image_tools
 from openpi_client import websocket_client_policy as _websocket_client_policy
 
+from robosuite.utils.detector import (
+    KitchenDetector, 
+    NutAssemblyDetector, 
+    CubeSortingDetector,
+    HeightStackingDetector,
+    AssemblyLineSortingDetector,
+    PatternReplicationDetector
+)
+
 from hanoi_detectors import PandaHanoiDetector as SimpleHanoiDetector
 
 # --------------------------------------------------------------------------------------
@@ -65,15 +74,15 @@ class Args:
 
     # --- Policy Interaction ---
     resize_size: int = 224           # Target size for image resizing (must match model training)
-    replan_steps: int = 50           # Number of steps per action chunk from policy server
+    replan_steps: int = 10           # Number of steps per action chunk from policy server
     use_sequential_tasks: bool =False # If True, use sequential task prompts; if False, use single prompt
     time_based_progression: bool = False # If True, advance to next task after task_timeout steps regardless of completion
-    task_timeout: int = 750          # Number of steps to wait before timing out a task
+    task_timeout: int = 2000          # Number of steps to wait before timing out a task
 
     # --- Robosuite Environment ---
-    env_name: str = "Hanoi" 
-    env: str = "Hanoi"                # Environment name for RecordDemos compatibility
-    robots: str = "Panda"           # Robot model to use
+    env_name: str = "CubeSorting" 
+    env: str = "CubeSorting"                # Environment name for RecordDemos compatibility
+    robots: str = "Kinova3"           # Robot model to use
     controller: str = "OSC_POSE"    # Robosuite controller name
     horizon: int = 7050             # Max steps per episode
     skip_steps: int = 50            # Number of initial steps to skip (e.g., wait for objects to settle)
@@ -105,7 +114,7 @@ class Args:
     episodes: int = 10      #: How many episodes to run back-to-back
 
     # --- Logging ---
-    wandb_project: str = "FINAL_pi0_hanoi_300_one_task_4_blocks"   #: W&B project name
+    wandb_project: str = "TEST_Kinova3_CubeSorting"   #: W&B project name
     log_every_n_seconds: float = 0.5                              #: Logging interval for W&B settings
     
     def generate_video_filename(self, episode: int) -> str:
@@ -379,9 +388,9 @@ class MultiConfigHanoiEnvironment:
             render_camera="agentview" if has_renderer else None,
             ignore_done=True,  # Let horizon end the episode
             hard_reset=False,  # Faster resets can sometimes be unstable, switch if needed
-            random_block_placement=self.args.random_block_placement,
-            random_block_selection=self.args.random_block_selection,
-            cube_init_pos_noise_std=self.args.cube_init_pos_noise_std
+            # random_block_placement=self.args.random_block_placement,
+            # random_block_selection=self.args.random_block_selection,
+            # cube_init_pos_noise_std=self.args.cube_init_pos_noise_std
         )
         
         logging.info(f"Environment created with random_block_placement={self.args.random_block_placement}, random_block_selection={self.args.random_block_selection}")
@@ -533,8 +542,8 @@ class MultiConfigHanoiEnvironment:
             logging.error(f"Error calling env.seed(): {e}")
         
         # Initialize detectors
-        self.detector_simple = SimpleHanoiDetector(self.env)
-        self.detector_ground = PandaHanoiDetector(self.env)
+        self.detector_simple = CubeSortingDetector(self.env)
+        self.detector_ground = CubeSortingDetector(self.env)
         
         # Setup PDDL path
         # Use 'hanoi' for PDDL path since Hanoi4x3 uses the same PDDL as Hanoi
@@ -567,10 +576,10 @@ class MultiConfigHanoiEnvironment:
             
             # Reinitialize detectors after reset
             logging.info("Initializing detectors...")
-            self.detector_simple = SimpleHanoiDetector(self.env)
+            self.detector_simple = CubeSortingDetector(self.env)
             logging.info("Simple detector initialized")
             
-            self.detector_ground = PandaHanoiDetector(self.env)
+            self.detector_ground = CubeSortingDetector(self.env)
             logging.info(f"Ground detector initialized with objects: {self.detector_ground.objects}")
             
             # Generate a new plan using the recorder
@@ -851,12 +860,13 @@ class TaskManager:
     
     def __init__(self, tasks: List[Dict[str, Any]], use_sequential_tasks: bool = False, 
                  time_based_progression: bool = False, task_timeout: int = 200):
+        self.single_prompt = "Sort the cubes by color."
         self.tasks = tasks
         self.use_sequential_tasks = use_sequential_tasks
         self.time_based_progression = time_based_progression
         self.task_timeout = task_timeout
         self.current_task_idx = 0
-        self.current_prompt = tasks[0]["prompt"] if tasks and use_sequential_tasks else "Play Towers of Hanoi."
+        self.current_prompt = tasks[0]["prompt"] if tasks and use_sequential_tasks else self.single_prompt
         self.task_totals = [0] * len(self.tasks) if tasks else []
         self.episode_score = 0
         self.task_completed_this_episode = [False] * len(self.tasks) if tasks else []
@@ -876,7 +886,7 @@ class TaskManager:
         if self.use_sequential_tasks:
             self.current_prompt = self.tasks[0]["prompt"] if self.tasks else ""
         else:
-            self.current_prompt = "Play Towers of Hanoi."
+            self.current_prompt = self.single_prompt
             
         self.episode_score = 0
         self.task_start_step = 0
@@ -1055,7 +1065,11 @@ class ObservationPreprocessor:
             "robot0_eye_in_hand_image",
             "robot0_eef_pos",
             "robot0_eef_quat",
-            "robot0_gripper_qpos"
+            # "robot0_gripper_qpos",
+            # 'robot0_joint_pos_cos',
+            # 'robot0_joint_pos_sin',
+            # "gripper0_left_inner_finger",
+            # "gripper0_right_inner_finger"
         ]
         
         # Ensure obs is a dict (like in working examples)
@@ -1080,20 +1094,38 @@ class ObservationPreprocessor:
             image_tools.resize_with_pad(img, self.resize_size, self.resize_size))
         wrist_img = image_tools.convert_to_uint8(
             image_tools.resize_with_pad(wrist_img, self.resize_size, self.resize_size))
+
+        joint_cos = obs['robot0_joint_pos_cos']
+        joint_sin = obs['robot0_joint_pos_sin']
+        joint_state = np.arctan2(joint_sin, joint_cos).astype(np.float32)
+
+        left_finger_pos = self.env_manager.env.sim.data.body_xpos[
+            self.env_manager.env.sim.model.body_name2id("gripper0_left_inner_finger")
+        ]
+        right_finger_pos = self.env_manager.env.sim.data.body_xpos[
+            self.env_manager.env.sim.model.body_name2id("gripper0_right_inner_finger")
+        ]
+        gripper_width = float(np.linalg.norm(left_finger_pos - right_finger_pos))
+        
+        # Use the gripper width calculated from actual finger positions in sim
+        eef_gripper = np.array([gripper_width], dtype=np.float32)   
+
+        # State is the concatenation of joint state and gripper opening
+        state = np.concatenate((joint_state, eef_gripper)).astype(np.float32)
         
         # Process state
-        eef_pos = obs.get('robot0_eef_pos', np.zeros(3, dtype=np.float32))
-        eef_quat = obs.get('robot0_eef_quat', np.array([0., 0., 0., 1.], dtype=np.float32))
-        eef_gripper = obs.get('robot0_gripper_qpos', np.zeros(2, dtype=np.float32))
+        # eef_pos = obs.get('robot0_eef_pos', np.zeros(3, dtype=np.float32))
+        # eef_quat = obs.get('robot0_eef_quat', np.array([0., 0., 0., 1.], dtype=np.float32))
+        # eef_gripper = obs.get('robot0_gripper_qpos', np.zeros(2, dtype=np.float32))
         
-        # Convert quaternion to axis angle
-        eef_axis_angle = _quat2axisangle(eef_quat)
-        eef_state = np.concatenate((eef_pos, eef_axis_angle, eef_gripper)).astype(np.float32)
+        # # Convert quaternion to axis angle
+        # eef_axis_angle = _quat2axisangle(eef_quat)
+        # eef_state = np.concatenate((eef_pos, eef_axis_angle, eef_gripper)).astype(np.float32)
         
         return {
             "image": img,
             "wrist_image": wrist_img,
-            "state": eef_state,
+            "state": state,
             "raw_agentview": obs["agentview_image"]  # For video recording
         }
 
@@ -1128,7 +1160,7 @@ def run_robosuite_with_openpi(args: Args) -> None:
             logging.info(f"Tasks will progress automatically as goals are achieved, but episode will terminate early if any task takes longer than {args.task_timeout} steps")
     else:
         logging.info("Running in SINGLE PROMPT MODE")
-        logging.info("Using fixed prompt: 'Play Towers of Hanoi.' for all steps")
+        logging.info(f"Using fixed prompt: {task_manager.single_prompt} for all steps")
         if not args.time_based_progression:
             logging.info(f"Episode will terminate early if any task takes longer than {args.task_timeout} steps")
     
