@@ -26,8 +26,7 @@ services:
       - PYTHONPATH=/robosuite_source:${PYTHONPATH}
       - PYTHONPATH=/robosuite_source:/app:/app/packages/openpi-client/src:/app/third_party/libero
       - WANDB_API_KEY=${WANDB_API_KEY}
-      - DISPLAY=$DISPLAY # REMOVE or comment out this line
-      # ADD this line (optional, but recommended):
+      - DISPLAY=$DISPLAY
       - NVIDIA_DRIVER_CAPABILITIES=all
     deploy:
       resources:
