@@ -321,20 +321,34 @@ class ObservationPreprocessor:
         state = np.concatenate((joint_state, eef_gripper)).astype(np.float32)
         
         # Process state
-        # eef_pos = obs.get('robot0_eef_pos', np.zeros(3, dtype=np.float32))
-        # eef_quat = obs.get('robot0_eef_quat', np.array([0., 0., 0., 1.], dtype=np.float32))
+        eef_pos = obs.get('robot0_eef_pos', np.zeros(3, dtype=np.float32))
+        eef_quat = obs.get('robot0_eef_quat', np.array([0., 0., 0., 1.], dtype=np.float32))
         # eef_gripper = obs.get('robot0_gripper_qpos', np.zeros(2, dtype=np.float32))
         
         # # Convert quaternion to axis angle
-        # eef_axis_angle = _quat2axisangle(eef_quat)
+        eef_axis_angle = _quat2axisangle(eef_quat)
         # eef_state = np.concatenate((eef_pos, eef_axis_angle, eef_gripper)).astype(np.float32)
+        eef_state = np.concatenate((eef_pos, eef_axis_angle, eef_gripper, np.array([0.0], dtype=np.float32))).astype(np.float32)
+
         
         return {
             "image": img,
             "wrist_image": wrist_img,
-            "state": state,
+            "state": eef_state,
             "raw_agentview": obs["agentview_image"]  # For video recording
         }
+
+def generate_video_filename(args, episode: int) -> str:
+    """Generate video filename based on current arguments and episode number
+    """
+    env = args.env_name
+    date = time.strftime('%Y%m%d')
+    timestamp = time.strftime('%H%M%S')
+    return f"{env}/{date}/{env}_{timestamp}_seed{args.seed}_ep{episode+1}.mp4"
+
+def generate_wandb_run_name(args, episode: int) -> str:
+    """Generate W&B run name based on current arguments and episode number."""
+    return f"{args.env_name}_seed{args.seed}_ep{episode+1}_{time.strftime('%H%M%S')}"
 
 
 # --------------------------------------------------------------------------------------
@@ -395,7 +409,7 @@ def main(args: Args) -> None:
         logging.info(f"\n=========  EPISODE {ep+1}/{args.episodes}  =========")
         
         # Initialize W&B run for this episode
-        run_name = args.generate_wandb_run_name(ep)
+        run_name = generate_wandb_run_name(args, ep)
         wandb_run = wandb.init(
             project=args.wandb_project,
             name=run_name,
@@ -405,7 +419,7 @@ def main(args: Args) -> None:
         )
         
         # Setup video recording
-        video_filename = args.generate_video_filename(ep)
+        video_filename = generate_video_filename(args, ep)
         video_full_path = pathlib.Path(args.video_out_path) / video_filename
         pathlib.Path(args.video_out_path).mkdir(parents=True, exist_ok=True)
         frames = []
@@ -702,6 +716,7 @@ def main(args: Args) -> None:
         
         # Save videos
         if frames:
+            video_full_path.parent.mkdir(parents=True, exist_ok=True)
             logging.info(f"Saving model observation video ({len(frames)} frames) to {video_full_path}...")
             try:
                 imageio.mimwrite(str(video_full_path), frames, fps=env_manager.env.control_freq)
@@ -713,6 +728,7 @@ def main(args: Args) -> None:
             
         # Save full resolution videos if enabled
         if args.save_full_res_video and hd_frames:
+            full_res_video_path.parent.mkdir(parents=True, exist_ok=True)
             logging.info(f"Saving full resolution agentview video ({len(hd_frames)} frames) to {full_res_video_path}...")
             try:
                 # Flip frames vertically to fix upside-down issue (same as in dataset_making)
@@ -722,6 +738,7 @@ def main(args: Args) -> None:
             except Exception as e:
                 logging.error(f"Failed to save full resolution agentview video: {e}")
                 
+            full_res_wrist_video_path.parent.mkdir(parents=True, exist_ok=True)
             logging.info(f"Saving full resolution wrist video ({len(hd_wrist_frames)} frames) to {full_res_wrist_video_path}...")
             try:
                 # Flip frames vertically to fix upside-down issue

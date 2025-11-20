@@ -21,7 +21,7 @@ class Args:
     replan_steps: int = 10           # Number of steps per action chunk from policy server
     planner_guided: bool =False      # If True, use subtask prompts; if False, use end-to-end task prompts
     time_based_progression: bool = False # If True, advance to next task after task_timeout steps regardless of completion
-    task_timeout: int = 2000          # Number of steps to wait before timing out a task
+    task_timeout: int = 500          # Number of steps to wait before timing out a task
 
     # --- Robosuite Environment ---
     env_name: str = "Hanoi" 
@@ -44,6 +44,9 @@ class Args:
     camera_names:   List[str] = dataclasses.field(
         default_factory=lambda: ["agentview", "robot0_eye_in_hand"]
         ) # Cameras for observation/video
+    verbose: bool = False
+    noise_std: float = 0.0
+    noisy_fraction: float = 0.0
     
     # --- Full Resolution Video Recording ---
     save_full_res_video: bool = True    # Save full resolution videos
@@ -58,21 +61,6 @@ class Args:
     episodes: int = 10      # How many episodes to run back-to-back
 
     # --- Logging ---
-    wandb_project: str = "TEST_Kinova3_CubeSorting"   # W&B project name
+    wandb_project: str = "TEST_Kinova3_Hanoi_50_EE_E2E"   # W&B project name
     log_every_n_seconds: float = 0.5                              # Logging interval for W&B settings
     
-    def generate_video_filename(self, episode: int) -> str:
-        """Generate video filename based on current arguments and episode number
-        """
-        env = self.env_name
-        date = time.strftime('%Y%m%d')
-        time = time.strftime('%H%M%S')
-        return f"{env}/{date}/{env}_{time}_seed{self.seed}_ep{episode+1}.mp4"
-    
-    def generate_wandb_run_name(self, episode: int) -> str:
-        """Generate W&B run name based on current arguments and episode number."""
-        return f"{self.env_name}_seed{self.seed}_ep{episode+1}_{time.strftime('%H%M%S')}"
-    
-    def get_required_cameras(self) -> List[str]:
-        """Get the list of required cameras for OpenPI preprocessing."""
-        return self.required_cameras

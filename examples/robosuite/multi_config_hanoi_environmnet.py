@@ -49,7 +49,7 @@ class MultiConfigHanoiEnvironment:
         has_offscreen = True  # Need offscreen renderer for observations even if rendering on-screen
         
         # Verify required cameras
-        for cam in self.args.get_required_cameras():
+        for cam in self.args.required_cameras:
             if cam not in self.args.camera_names:
                 logging.warning(f"Required camera '{cam}' not in requested camera_names. Adding it.")
                 self.args.camera_names.append(cam)
@@ -239,14 +239,11 @@ class MultiConfigHanoiEnvironment:
         
         # Create recorder for planning
         self.recorder = RecordDemos(
-            self.env,
-            vision_based=True,  # Use vision-based observations
-            detector=self.detector_ground,
-            pddl_path=self.pddl_path,
             args=self.args,
-            render=self.args.render_mode == 'human',
-            randomize=True,
-            noise_std_factor=0.03
+            env=self.env,
+            # vision_based=True,  # Use vision-based observations
+            detector=self.detector_ground,
+            pddl_path=self.pddl_path
         )
         
     def reset(self):
@@ -267,7 +264,7 @@ class MultiConfigHanoiEnvironment:
             
             # Generate a new plan using the recorder
             logging.info("Generating plan...")
-            self.recorder.reset()
+            self.recorder.reset(successes=0)
             logging.info("Plan generation successful")
             
             # Build task sequence based on the generated plan
