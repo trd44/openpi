@@ -69,6 +69,6 @@ CMD ["/bin/bash", "-c", \
     echo 'Custom Robosuite installed.' && \
     uv pip install --no-cache-dir -e /tarski && \
     echo 'Tarski installed.' && \
-    uv pip install wandb h5py && \
+    uv pip install wandb gymnasium h5py && \
     cd /app && \
     python examples/robosuite/main.py"]
