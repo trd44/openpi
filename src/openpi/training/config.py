@@ -1044,7 +1044,7 @@ _CONFIGS = [
     TrainConfig(
         name="pi05_hanoi_50_lora",
         # Here is an example of loading a pi0 model for LoRA fine-tuning.
-        model=pi0_config.Pi0Config(pi05=True, action_horizon=50, paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"),
+        model=pi0_config.Pi0Config(pi05=True, action_horizon=10, paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"),
         data=LeRobotLiberoDataConfig(
             repo_id="tduggan93/hanoi_50",
             base_config=DataConfig(prompt_from_task=True),
