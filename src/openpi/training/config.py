@@ -307,11 +307,11 @@ class LeRobotLiberoDataConfig(DataConfigFactory):
 
         # TODO(karl): comment this out once we have updated the Libero checkpoints to not use
         # the delta action transform
-        delta_action_mask = _transforms.make_bool_mask(6, -1)
-        data_transforms = data_transforms.push(
-            inputs=[_transforms.DeltaActions(delta_action_mask)],
-            outputs=[_transforms.AbsoluteActions(delta_action_mask)],
-        )
+        # delta_action_mask = _transforms.make_bool_mask(6, -1)
+        # data_transforms = data_transforms.push(
+        #     inputs=[_transforms.DeltaActions(delta_action_mask)],
+        #     outputs=[_transforms.AbsoluteActions(delta_action_mask)],
+        # )
 
         # Model transforms include things like tokenizing the prompt and action targets
         # You do not need to change anything here for your own dataset.
@@ -915,7 +915,6 @@ _CONFIGS = [
         name="pi0_hanoi_50_lora",
         # Here is an example of loading a pi0 model for LoRA fine-tuning.
         model=pi0.Pi0Config(
-            action_horizon=10,
             paligemma_variant="gemma_2b_lora",
             action_expert_variant="gemma_300m_lora",
         ),
@@ -933,7 +932,8 @@ _CONFIGS = [
         # for the given model config for LoRA finetuning. Just make sure it matches the model config
         # you chose above.
         freeze_filter=pi0.Pi0Config(
-            paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"
+            paligemma_variant="gemma_2b_lora", 
+            action_expert_variant="gemma_300m_lora"
         ).get_freeze_filter(),
         # Turn off EMA for LoRA finetuning.
         ema_decay=None,
