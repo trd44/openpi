@@ -1044,11 +1044,11 @@ _CONFIGS = [
     TrainConfig(
         name="pi05_hanoi_50_lora",
         # Here is an example of loading a pi0 model for LoRA fine-tuning.
-        model=pi0_config.Pi0Config(pi05=True, action_horizon=10, paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"),
+        model=pi0_config.Pi0Config(pi05=True, action_horizon=50, paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"),
         data=LeRobotLiberoDataConfig(
             repo_id="tduggan93/hanoi_50",
             base_config=DataConfig(prompt_from_task=True),
-            extra_delta_transform=True,
+            extra_delta_transform=False,
         ),
         batch_size=16,
         weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi05_base/params"),
@@ -1064,14 +1064,14 @@ _CONFIGS = [
         ema_decay=None,
         instruction_override="Play Towers of Hanoi.",
     ),
-    TrainConfig(
-        name="pi05_hanoi_50_lora",
+        TrainConfig(
+        name="pi05_hanoi_50_pg_lora",
         # Here is an example of loading a pi0 model for LoRA fine-tuning.
         model=pi0_config.Pi0Config(pi05=True, action_horizon=10, paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"),
         data=LeRobotLiberoDataConfig(
             repo_id="tduggan93/hanoi_50",
             base_config=DataConfig(prompt_from_task=True),
-            extra_delta_transform=True,
+            extra_delta_transform=False,
         ),
         batch_size=16,
         weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi05_base/params"),
@@ -1085,7 +1085,7 @@ _CONFIGS = [
         ).get_freeze_filter(),
         # Turn off EMA for LoRA finetuning.
         ema_decay=None,
-        instruction_override="Play Towers of Hanoi.",
+        # instruction_override="Play Towers of Hanoi.",
     ),
 ]
 
