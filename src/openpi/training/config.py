@@ -1064,6 +1064,34 @@ _CONFIGS = [
         ema_decay=None,
         instruction_override="Play Towers of Hanoi.",
     ),
+    TrainConfig(
+        name="pi05_hanoi_50_finetune_action_expert",
+        # Here is an example of loading a pi0 model for LoRA fine-tuning.
+        model=pi0_config.Pi0Config(pi05=True, action_horizon=10, discrete_state_input=False),
+        data=LeRobotLiberoDataConfig(
+            repo_id="tduggan93/hanoi_50",
+            base_config=DataConfig(prompt_from_task=True),
+            extra_delta_transform=False,
+        ),
+        batch_size=256,
+        lr_schedule=_optimizer.CosineDecaySchedule(
+            warmup_steps=10_000,
+            peak_lr=5e-5,
+            decay_steps=1_000_000,
+            decay_lr=5e-5,
+        ),
+        # freeze the vlm backbone and paligemma, only finetune the action expert
+        freeze_filter=pi0_config.Pi0Config(
+            paligemma_variant="gemma_2b", action_expert_variant="gemma_300m_lora"
+        ).get_freeze_filter(),
+        optimizer=_optimizer.AdamW(clip_gradient_norm=1.0),
+        ema_decay=0.999,
+        # finetune on top of libero?
+        weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi05_libero/params"),
+        num_train_steps=30_000,
+        
+        instruction_override="Play Towers of Hanoi.",
+    ),
         TrainConfig(
         name="pi05_hanoi_50_pg_lora",
         # Here is an example of loading a pi0 model for LoRA fine-tuning.
