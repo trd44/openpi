@@ -4,12 +4,8 @@ Main script for running Robosuite with OpenPI policy server.
 import collections
 import dataclasses
 import logging
-import math
 import pathlib
 import time
-import psutil
-import subprocess
-from typing import Dict, Any
 from args import Args
 
 import imageio
@@ -17,13 +13,17 @@ import numpy as np
 import wandb
 import tyro
 
-# Assuming openpi_client is installed in the environment
-from openpi_client import image_tools
 from openpi_client import websocket_client_policy as _websocket_client_policy
 
-from hanoi_detectors import PandaHanoiDetector as SimpleHanoiDetector
-from task_manager import TaskManager
 from multi_config_hanoi_environmnet import MultiConfigHanoiEnvironment
+from obs_processor import ObsProcessor
+from task_manager import TaskManager
+from utils import (
+    get_system_metrics,
+    calculate_energy_consumption,
+    generate_video_filename,
+    generate_wandb_run_name
+)
 
 # ------------------------------------------------------------------------------
 # Constants and Configuration
@@ -43,317 +43,6 @@ PLANNING_PREDICATES = {
 PLANNING_MODE = {"Hanoi": 0, "Hanoi4x3": 0, "KitchenEnv": 1, "NutAssembly": 0}
 
 
-# ------------------------------------------------------------------------------
-# Utility functions
-# ------------------------------------------------------------------------------
-def _quat2axisangle(quat: np.ndarray) -> np.ndarray:
-    """
-    Convert quaternion to axis-angle representation.
-    Copied from robosuite: 
-    https://github.com/ARISE-Initiative/robosuite/blob/eafb81f54ffc104f905ee48a1
-    6bb15f059176ad3/robosuite/utils/transform_utils.py#L490C1-L512C55
-    """
-    # clip quaternion
-    if quat[3] > 1.0:
-        quat[3] = 1.0
-    elif quat[3] < -1.0:
-        quat[3] = -1.0
-
-    den = np.sqrt(1.0 - quat[3] * quat[3])
-    if math.isclose(den, 0.0):
-        # This is (close to) a zero degree rotation, immediately return
-        return np.zeros(3)
-
-    return (quat[:3] * 2.0 * math.acos(quat[3])) / den
-
-
-def quaternion_to_euler(quat: np.ndarray) -> np.ndarray:
-    """Convert a quaternion (x, y, z, w) to Euler angles (roll, pitch, yaw)."""
-    x, y, z, w = quat
-    # Roll (x-axis rotation)
-    sinr_cosp = 2 * (w * x + y * z)
-    cosr_cosp = 1 - 2 * (x * x + y * y)
-    roll = np.arctan2(sinr_cosp, cosr_cosp)
-    # Pitch (y-axis rotation)
-    sinp = 2 * (w * y - z * x)
-    pitch = np.arcsin(np.clip(sinp, -1.0, 1.0))
-    # Yaw (z-axis rotation)
-    siny_cosp = 2 * (w * z + x * y)
-    cosy_cosp = 1 - 2 * (y * y + z * z)
-    yaw = np.arctan2(siny_cosp, cosy_cosp)
-    return np.array([roll, pitch, yaw], dtype=np.float32)
-
-
-# ------------------------------------------------------------------------------
-# System monitoring functions
-# ------------------------------------------------------------------------------
-def get_gpu_power_usage():
-    """Get GPU power usage in watts."""
-    try:
-        result = subprocess.run(['nvidia-smi', '--query-gpu=power.draw', '--format=csv,noheader,nounits'], 
-                              capture_output=True, text=True, timeout=5)
-        if result.returncode == 0:
-            power_values = [float(x.strip()) for x in result.stdout.strip().split('\n') if x.strip()]
-            return sum(power_values) if power_values else 0.0
-    except (subprocess.TimeoutExpired, subprocess.CalledProcessError, ValueError, FileNotFoundError):
-        pass
-    return 0.0
-
-def get_gpu_utilization():
-    """Get GPU utilization percentage."""
-    try:
-        result = subprocess.run(['nvidia-smi', '--query-gpu=utilization.gpu', '--format=csv,noheader,nounits'], 
-                              capture_output=True, text=True, timeout=5)
-        if result.returncode == 0:
-            util_values = [float(x.strip()) for x in result.stdout.strip().split('\n') if x.strip()]
-            return sum(util_values) / len(util_values) if util_values else 0.0
-    except (subprocess.TimeoutExpired, subprocess.CalledProcessError, ValueError, FileNotFoundError):
-        pass
-    return 0.0
-
-def get_gpu_memory_usage():
-    """Get GPU memory usage percentage."""
-    try:
-        result = subprocess.run(['nvidia-smi', '--query-gpu=memory.used,memory.total', '--format=csv,noheader,nounits'], 
-                              capture_output=True, text=True, timeout=5)
-        if result.returncode == 0:
-            lines = result.stdout.strip().split('\n')
-            total_used = 0
-            total_available = 0
-            for line in lines:
-                if ',' in line:
-                    used, total = line.split(',')
-                    total_used += float(used.strip())
-                    total_available += float(total.strip())
-            return (total_used / total_available * 100) if total_available > 0 else 0.0
-    except (subprocess.TimeoutExpired, subprocess.CalledProcessError, ValueError, FileNotFoundError):
-        pass
-    return 0.0
-
-def get_cpu_power_usage():
-    """Get CPU power usage estimation based on frequency and utilization."""
-    try:
-        # Get CPU frequency and utilization
-        cpu_freq = psutil.cpu_freq()
-        cpu_percent = psutil.cpu_percent(interval=0.1)
-        
-        if cpu_freq and cpu_freq.current > 0:
-            # Rough estimation: higher frequency and utilization = higher power
-            # This is a simplified model - actual power depends on many factors
-            base_power = 15.0  # Base power in watts
-            freq_factor = (cpu_freq.current / cpu_freq.max) if cpu_freq.max > 0 else 1.0
-            util_factor = cpu_percent / 100.0
-            
-            estimated_power = base_power * freq_factor * (0.5 + 0.5 * util_factor)
-            return estimated_power
-    except Exception:
-        pass
-    return 0.0
-
-def get_system_metrics():
-    """Get comprehensive system metrics with timestamps."""
-    try:
-        # Get current timestamp
-        current_time = time.time()
-        
-        # CPU metrics
-        cpu_percent = psutil.cpu_percent(interval=0.1)
-        cpu_freq = psutil.cpu_freq()
-        cpu_count = psutil.cpu_count()
-        
-        # Memory metrics
-        memory = psutil.virtual_memory()
-        memory_percent = memory.percent
-        memory_used_gb = memory.used / (1024**3)
-        memory_total_gb = memory.total / (1024**3)
-        
-        # Disk metrics
-        disk = psutil.disk_usage('/')
-        disk_percent = disk.percent
-        disk_used_gb = disk.used / (1024**3)
-        disk_total_gb = disk.total / (1024**3)
-        
-        # GPU metrics
-        gpu_power = get_gpu_power_usage()
-        gpu_util = get_gpu_utilization()
-        gpu_memory = get_gpu_memory_usage()
-        
-        # CPU power estimation
-        cpu_power = get_cpu_power_usage()
-        
-        return {
-            'timestamp': current_time,
-            'timestamp_iso': time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(current_time)),
-            'cpu_percent': cpu_percent,
-            'cpu_freq_mhz': cpu_freq.current if cpu_freq else 0,
-            'cpu_count': cpu_count,
-            'cpu_power_watts': cpu_power,
-            'memory_percent': memory_percent,
-            'memory_used_gb': memory_used_gb,
-            'memory_total_gb': memory_total_gb,
-            'disk_percent': disk_percent,
-            'disk_used_gb': disk_used_gb,
-            'disk_total_gb': disk_total_gb,
-            'gpu_power_watts': gpu_power,
-            'gpu_utilization_percent': gpu_util,
-            'gpu_memory_percent': gpu_memory,
-        }
-    except Exception as e:
-        logging.warning(f"Error getting system metrics: {e}")
-        return {}
-
-def calculate_energy_consumption(power_data_points):
-    """
-    Calculate total energy consumption from power data points with timestamps.
-    
-    Args:
-        power_data_points: List of dicts with 'timestamp' and power values
-        
-    Returns:
-        Dict with total energy consumption in watt-hours and joules
-    """
-    if len(power_data_points) < 2:
-        return {'total_energy_wh': 0, 'total_energy_joules': 0, 'duration_seconds': 0}
-    
-    # Sort by timestamp
-    sorted_points = sorted(power_data_points, key=lambda x: x['timestamp'])
-    
-    total_gpu_energy = 0
-    total_cpu_energy = 0
-    total_duration = 0
-    
-    for i in range(1, len(sorted_points)):
-        prev = sorted_points[i-1]
-        curr = sorted_points[i]
-        
-        # Time interval in hours
-        time_interval_hours = (curr['timestamp'] - prev['timestamp']) / 3600.0
-        time_interval_seconds = curr['timestamp'] - prev['timestamp']
-        
-        # Average power during this interval
-        avg_gpu_power = (prev.get('gpu_power_watts', 0) + curr.get('gpu_power_watts', 0)) / 2
-        avg_cpu_power = (prev.get('cpu_power_watts', 0) + curr.get('cpu_power_watts', 0)) / 2
-        
-        # Energy = Power × Time
-        gpu_energy = avg_gpu_power * time_interval_hours
-        cpu_energy = avg_cpu_power * time_interval_hours
-        
-        total_gpu_energy += gpu_energy
-        total_cpu_energy += cpu_energy
-        total_duration += time_interval_seconds
-    
-    total_energy_wh = total_gpu_energy + total_cpu_energy
-    total_energy_joules = total_energy_wh * 3600  # Convert watt-hours to joules
-    
-    return {
-        'total_energy_wh': total_energy_wh,
-        'total_energy_joules': total_energy_joules,
-        'gpu_energy_wh': total_gpu_energy,
-        'cpu_energy_wh': total_cpu_energy,
-        'duration_seconds': total_duration,
-        'duration_hours': total_duration / 3600
-    }
-
-# --------------------------------------------------------------------------------------
-# Observation preprocessing
-# --------------------------------------------------------------------------------------
-class ObservationPreprocessor:
-    """Handles preprocessing of environment observations for OpenPI."""
-    
-    def __init__(self, resize_size: int, env_manager=None):
-        self.resize_size = resize_size
-        self.env_manager = env_manager
-        
-    def preprocess_observations(self, obs: Dict[str, Any]) -> Dict[str, np.ndarray]:
-        """Preprocess observations for OpenPI inference."""
-        # Define required observation keys
-        required_obs_keys = [
-            "agentview_image",
-            "robot0_eye_in_hand_image",
-            "robot0_eef_pos",
-            "robot0_eef_quat",
-            # "robot0_gripper_qpos",
-            # 'robot0_joint_pos_cos',
-            # 'robot0_joint_pos_sin',
-            # "gripper0_left_inner_finger",
-            # "gripper0_right_inner_finger"
-        ]
-        
-        # Ensure obs is a dict (like in working examples)
-        if not isinstance(obs, dict):
-            obs = self.env_manager.env.env._get_observations()
-        
-        # Verify all required keys are present
-        if not all(k in obs for k in required_obs_keys):
-            missing_keys = [k for k in required_obs_keys if k not in obs]
-            raise KeyError(f"Missing required observation keys: {missing_keys}. Available: {list(obs.keys())}")
-        
-        # Process images
-        img_obs = obs["agentview_image"]
-        wrist_obs = obs["robot0_eye_in_hand_image"]
-        
-        # Rotate 180 degrees
-        img = np.ascontiguousarray(img_obs[::-1, ::-1], dtype=np.uint8)
-        wrist_img = np.ascontiguousarray(wrist_obs[::-1, ::-1], dtype=np.uint8)
-        
-        # Resize and pad
-        img = image_tools.convert_to_uint8(
-            image_tools.resize_with_pad(img, self.resize_size, self.resize_size))
-        wrist_img = image_tools.convert_to_uint8(
-            image_tools.resize_with_pad(wrist_img, self.resize_size, self.resize_size))
-
-        joint_cos = obs['robot0_joint_pos_cos']
-        joint_sin = obs['robot0_joint_pos_sin']
-        joint_state = np.arctan2(joint_sin, joint_cos).astype(np.float32)
-
-        left_finger_pos = self.env_manager.env.sim.data.body_xpos[
-            self.env_manager.env.sim.model.body_name2id("gripper0_left_inner_finger")
-        ]
-        right_finger_pos = self.env_manager.env.sim.data.body_xpos[
-            self.env_manager.env.sim.model.body_name2id("gripper0_right_inner_finger")
-        ]
-        gripper_width = float(np.linalg.norm(left_finger_pos - right_finger_pos))
-        
-        # Use the gripper width calculated from actual finger positions in sim
-        eef_gripper = np.array([gripper_width], dtype=np.float32)   
-
-        # State is the concatenation of joint state and gripper opening
-        state = np.concatenate((joint_state, eef_gripper)).astype(np.float32)
-        
-        # Process state
-        eef_pos = obs.get('robot0_eef_pos', np.zeros(3, dtype=np.float32))
-        eef_quat = obs.get('robot0_eef_quat', np.array([0., 0., 0., 1.], dtype=np.float32))
-        # eef_gripper = obs.get('robot0_gripper_qpos', np.zeros(2, dtype=np.float32))
-        
-        # # Convert quaternion to axis angle
-        eef_axis_angle = _quat2axisangle(eef_quat)
-        # eef_state = np.concatenate((eef_pos, eef_axis_angle, eef_gripper)).astype(np.float32)
-        eef_state = np.concatenate((eef_pos, eef_axis_angle, eef_gripper, np.array([0.0], dtype=np.float32))).astype(np.float32)
-
-        
-        return {
-            "image": img,
-            "wrist_image": wrist_img,
-            "state": eef_state,
-            "raw_agentview": obs["agentview_image"]  # For video recording
-        }
-
-def generate_video_filename(args, episode: int) -> str:
-    """Generate video filename based on current arguments and episode number
-    """
-    env = args.env_name
-    date = time.strftime('%Y%m%d')
-    timestamp = time.strftime('%H%M%S')
-    return f"{env}/{date}/{env}_{timestamp}_seed{args.seed}_ep{episode+1}.mp4"
-
-def generate_wandb_run_name(args, episode: int) -> str:
-    """Generate W&B run name based on current arguments and episode number."""
-    return f"{args.env_name}_seed{args.seed}_ep{episode+1}_{time.strftime('%H%M%S')}"
-
-
-# --------------------------------------------------------------------------------------
-# Main execution function
-# --------------------------------------------------------------------------------------
 def main(args: Args) -> None:
     """Runs a Robosuite environment controlled by an OpenPI policy server."""
     logging.info(f"Running Robosuite env '{args.env_name}' with OpenPI server at {args.host}:{args.port}")
@@ -374,7 +63,7 @@ def main(args: Args) -> None:
                               args.time_based_progression, args.task_timeout)
 
     # Setup observation preprocessor
-    obs_preprocessor = ObservationPreprocessor(args.resize_size, env_manager)
+    obs_processor = ObsProcessor(args.resize_size, env_manager)
     
     # Log the mode being used
     if args.planner_guided:
@@ -392,15 +81,12 @@ def main(args: Args) -> None:
             )
     else:
         logging.info("Running in END-TO-END MODE")
-        logging.info(f"Using fixed prompt: {task_manager.single_prompt} \
-            for all steps")
+        logging.info(f"Using fixed prompt: {task_manager.single_prompt} for all steps")
         if not args.time_based_progression:
-            logging.info(f"Episode will terminate early if any task takes \
-                longer than {args.task_timeout} steps")    
+            logging.info(f"Episode will terminate early if any task takes longer than {args.task_timeout} steps")    
     
     # Setup websocket client
-    logging.info(
-        f"Connecting to OpenPI server at ws://{args.host}:{args.port}...")
+    logging.debug(f"Connecting to OpenPI server at ws://{args.host}:{args.port}...")
     client = _websocket_client_policy.WebsocketClientPolicy(
         args.host, args.port)
     
@@ -495,7 +181,7 @@ def main(args: Args) -> None:
             
             # Preprocess observations
             try:
-                processed_obs = obs_preprocessor.preprocess_observations(obs)
+                processed_obs = obs_processor.preprocess_observations(obs)
                 frames.append(processed_obs["image"])
                 
                 # Capture full resolution frames for video recording if enabled
@@ -519,6 +205,10 @@ def main(args: Args) -> None:
             
             # Get action from OpenPI server if needed
             if not action_plan:
+                # print("Prompt:")
+                # print(task_manager.get_current_prompt())
+                # print("State:")
+                # print(processed_obs["state"])
                 element = {
                     "observation/image": processed_obs["image"],
                     "observation/wrist_image": processed_obs["wrist_image"],
@@ -578,6 +268,8 @@ def main(args: Args) -> None:
                 action[3] = 0  # Zero out rotation components
                 action[4] = 0
                 action[5] = 0
+
+                # print(f"Action: {action}")
                 
                 step_result = env_manager.env.step(action)
                 if len(step_result) == 5:

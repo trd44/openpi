@@ -51,7 +51,7 @@ services:
       - ${OPENPI_DATA_HOME:-~/.cache/openpi}:/openpi_assets
     environment:
       # - SERVER_ARGS=policy:checkpoint --policy.config pi0_cube_sorting_lora --policy.dir /app/checkpoints/pi0_cube_sorting_lora/cube_sorting/29999
-      - SERVER_ARGS=policy:checkpoint --policy.config pi0_hanoi_50_lora --policy.dir /app/checkpoints/pi0_hanoi_50_lora/hanoi_50_ee/29999
+      - SERVER_ARGS=policy:checkpoint --policy.config pi0_hanoi_50_lora --policy.dir /app/checkpoints/pi0_hanoi_50_lora/hanoi_50_ee_no_mask/29999
       - OPENPI_DATA_HOME=/openpi_assets
       - IS_DOCKER=true
     deploy:
