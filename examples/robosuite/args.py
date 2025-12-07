@@ -61,6 +61,6 @@ class Args:
     episodes: int = 10      # How many episodes to run back-to-back
 
     # --- Logging ---
-    wandb_project: str = "TEST_Kinova3_Hanoi_50_EE_E2E"   # W&B project name
+    wandb_project: str = "TEST_Kinova3_PI05_Hanoi_50_EE_E2E"   # W&B project name
     log_every_n_seconds: float = 0.5                              # Logging interval for W&B settings
     

@@ -297,10 +297,10 @@ class ObservationPreprocessor:
         wrist_img = np.ascontiguousarray(wrist_obs[::-1, ::-1], dtype=np.uint8)
         
         # Resize and pad
-        img = image_tools.convert_to_uint8(
-            image_tools.resize_with_pad(img, self.resize_size, self.resize_size))
-        wrist_img = image_tools.convert_to_uint8(
-            image_tools.resize_with_pad(wrist_img, self.resize_size, self.resize_size))
+        # img = image_tools.convert_to_uint8(
+        #     image_tools.resize_with_pad(img, self.resize_size, self.resize_size))
+        # wrist_img = image_tools.convert_to_uint8(
+        #     image_tools.resize_with_pad(wrist_img, self.resize_size, self.resize_size))
 
         joint_cos = obs['robot0_joint_pos_cos']
         joint_sin = obs['robot0_joint_pos_sin']
@@ -334,7 +334,7 @@ class ObservationPreprocessor:
         return {
             "image": img,
             "wrist_image": wrist_img,
-            "state": eef_state,
+            "state": joint_state,
             "raw_agentview": obs["agentview_image"]  # For video recording
         }
 
@@ -525,7 +525,7 @@ def main(args: Args) -> None:
                     "observation/state": processed_obs["state"],
                     "prompt": task_manager.get_current_prompt(),
                 }
-                
+                print(element["prompt"])
                 logging.debug("Requesting inference from server...")
                 try:
                     inf_start = time.time()
