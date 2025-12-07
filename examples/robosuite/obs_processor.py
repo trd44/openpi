@@ -85,6 +85,6 @@ class ObsProcessor:
         return {
             "image": img,
             "wrist_image": wrist_img,
-            "state": eef_state,
+            "state": state,
             "raw_agentview": obs["agentview_image"]  # For video recording
         }
