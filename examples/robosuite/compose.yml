@@ -1,11 +1,11 @@
 services:
   runtime:
-    image: libero
+    image: robosuite
     depends_on:
       - openpi_server
     build:
       context: ../..
-      dockerfile: examples/libero/Dockerfile
+      dockerfile: examples/robosuite/Dockerfile
     init: true
     tty: true
     network_mode: host # Keep this for now unless it causes other issues
@@ -51,7 +51,7 @@ services:
       - ${OPENPI_DATA_HOME:-~/.cache/openpi}:/openpi_assets
     environment:
       # - SERVER_ARGS=policy:checkpoint --policy.config pi0_cube_sorting_lora --policy.dir /app/checkpoints/pi0_cube_sorting_lora/cube_sorting/29999
-      - SERVER_ARGS=policy:checkpoint --policy.config pi0_hanoi_50_lora --policy.dir /app/checkpoints/pi0_hanoi_50_lora/hanoi_50/29999
+      - SERVER_ARGS=policy:checkpoint --policy.config pi0_hanoi_50_lora --policy.dir /app/checkpoints/pi0_hanoi_50_lora/hanoi_50_ja_no_mask_50ah/29999
       - OPENPI_DATA_HOME=/openpi_assets
       - IS_DOCKER=true
     deploy:

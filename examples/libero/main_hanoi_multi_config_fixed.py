@@ -33,6 +33,7 @@ from openpi_client import image_tools
 from openpi_client import websocket_client_policy as _websocket_client_policy
 
 from robosuite.utils.detector import (
+    HanoiDetector,
     KitchenDetector, 
     NutAssemblyDetector, 
     CubeSortingDetector,
@@ -80,8 +81,8 @@ class Args:
     task_timeout: int = 2000          # Number of steps to wait before timing out a task
 
     # --- Robosuite Environment ---
-    env_name: str = "AssemblyLineSorting"                # Environment name
-    env: str = "AssemblyLineSorting"                # Environment name for RecordDemos compatibility
+    env_name: str = "Hanoi" 
+    env: str = "Hanoi"                # Environment name for RecordDemos compatibility
     robots: str = "Kinova3"           # Robot model to use
     controller: str = "OSC_POSE"    # Robosuite controller name
     horizon: int = 7050             # Max steps per episode
@@ -542,9 +543,9 @@ class MultiConfigHanoiEnvironment:
             logging.error(f"Error calling env.seed(): {e}")
         
         # Initialize detectors
-        self.detector_simple = AssemblyLineSortingDetector(self.env)
-        self.detector_ground = AssemblyLineSortingDetector(self.env)
-
+        self.detector_simple = HanoiDetector(self.env)
+        self.detector_ground = HanoiDetector(self.env)
+        
         # Setup PDDL path
         # Use 'hanoi' for PDDL path since Hanoi4x3 uses the same PDDL as Hanoi
         pddl_env_name = 'hanoi' if self.args.env_name.lower() == 'hanoi4x3' else self.args.env_name.lower()
@@ -576,10 +577,10 @@ class MultiConfigHanoiEnvironment:
             
             # Reinitialize detectors after reset
             logging.info("Initializing detectors...")
-            self.detector_simple = AssemblyLineSortingDetector(self.env)
+            self.detector_simple = HanoiDetector(self.env)
             logging.info("Simple detector initialized")
-
-            self.detector_ground = AssemblyLineSortingDetector(self.env)
+            
+            self.detector_ground = HanoiDetector(self.env)
             logging.info(f"Ground detector initialized with objects: {self.detector_ground.objects}")
             
             # Generate a new plan using the recorder
@@ -860,7 +861,7 @@ class TaskManager:
     
     def __init__(self, tasks: List[Dict[str, Any]], use_sequential_tasks: bool = False, 
                  time_based_progression: bool = False, task_timeout: int = 200):
-        self.single_prompt = "Sort the cubes by color."
+        self.single_prompt = "Play Towers of Hanoi."
         self.tasks = tasks
         self.use_sequential_tasks = use_sequential_tasks
         self.time_based_progression = time_based_progression
