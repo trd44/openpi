@@ -18,7 +18,7 @@ class Args:
 
     # --- Policy Interaction ---
     resize_size: int = 224           # Target size for image resizing (must match model training)
-    replan_steps: int = 10           # Number of steps per action chunk from policy server
+    replan_steps: int = 50           # Number of steps per action chunk from policy server
     planner_guided: bool =False      # If True, use subtask prompts; if False, use end-to-end task prompts
     time_based_progression: bool = False # If True, advance to next task after task_timeout steps regardless of completion
     task_timeout: int = 500          # Number of steps to wait before timing out a task
@@ -61,6 +61,6 @@ class Args:
     episodes: int = 10      # How many episodes to run back-to-back
 
     # --- Logging ---
-    wandb_project: str = "TEST_Kinova3_PI05_Hanoi_50_EE_E2E"   # W&B project name
+    wandb_project: str = "TEST_Kinova3_Hanoi_50_EE_E2E"   # W&B project name
     log_every_n_seconds: float = 0.5                              # Logging interval for W&B settings
     
