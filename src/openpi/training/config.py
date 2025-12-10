@@ -1058,7 +1058,9 @@ _CONFIGS = [
         # for the given model config for LoRA finetuning. Just make sure it matches the model config
         # you chose above.
         freeze_filter=pi0_config.Pi0Config(
-            paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"
+            pi05=True, action_horizon=50, 
+            paligemma_variant="gemma_2b_lora", 
+            action_expert_variant="gemma_300m_lora"
         ).get_freeze_filter(),
         # Turn off EMA for LoRA finetuning.
         ema_decay=None,
@@ -1094,28 +1096,34 @@ _CONFIGS = [
         
         instruction_override="Play Towers of Hanoi.",
     ),
-        TrainConfig(
-        name="pi05_hanoi_50_pg_lora",
-        # Here is an example of loading a pi0 model for LoRA fine-tuning.
-        model=pi0_config.Pi0Config(pi05=True, action_horizon=10, paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"),
+    TrainConfig(
+        name="pi0_assembly_line_sorting_lora",
+        model=pi0_config.Pi0Config(
+            paligemma_variant="gemma_2b_lora", 
+            action_expert_variant="gemma_300m_lora"
+        ),
+        freeze_filter=pi0_config.Pi0Config(
+            paligemma_variant="gemma_2b_lora",
+            action_expert_variant="gemma_300m_lora"
+        ).get_freeze_filter(),
         data=LeRobotLiberoDataConfig(
-            repo_id="tduggan93/hanoi_50",
+            repo_id="tduggan93/assembly_line_sorting",
             base_config=DataConfig(prompt_from_task=True),
             extra_delta_transform=False,
         ),
         batch_size=16,
-        weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi05_base/params"),
-        num_train_steps=30_000,
-        # The freeze filter defines which parameters should be frozen during training.
-        # We have a convenience function in the model config that returns the default freeze filter
-        # for the given model config for LoRA finetuning. Just make sure it matches the model config
-        # you chose above.
-        freeze_filter=pi0_config.Pi0Config(
-            paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"
-        ).get_freeze_filter(),
+        lr_schedule=_optimizer.CosineDecaySchedule(
+            warmup_steps=10_000,
+            peak_lr=5e-5,
+            decay_steps=1_000_000,
+            decay_lr=5e-5,
+        ),
+        optimizer=_optimizer.AdamW(clip_gradient_norm=1.0),
         # Turn off EMA for LoRA finetuning.
         ema_decay=None,
-        # instruction_override="Play Towers of Hanoi.",
+        weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi0_base/params"),
+        num_train_steps=30_000,
+        instruction_override="Sort the cubes on the assembly line by color.",
     ),
 ]
 
