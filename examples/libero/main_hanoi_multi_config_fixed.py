@@ -80,8 +80,8 @@ class Args:
     task_timeout: int = 2000          # Number of steps to wait before timing out a task
 
     # --- Robosuite Environment ---
-    env_name: str = "CubeSorting" 
-    env: str = "CubeSorting"                # Environment name for RecordDemos compatibility
+    env_name: str = "AssemblyLineSorting"                # Environment name
+    env: str = "AssemblyLineSorting"                # Environment name for RecordDemos compatibility
     robots: str = "Kinova3"           # Robot model to use
     controller: str = "OSC_POSE"    # Robosuite controller name
     horizon: int = 7050             # Max steps per episode
@@ -114,7 +114,7 @@ class Args:
     episodes: int = 10      #: How many episodes to run back-to-back
 
     # --- Logging ---
-    wandb_project: str = "TEST_Kinova3_CubeSorting"   #: W&B project name
+    wandb_project: str = "TEST_Kinova3_AssemblyLineSorting"   #: W&B project name
     log_every_n_seconds: float = 0.5                              #: Logging interval for W&B settings
     
     def generate_video_filename(self, episode: int) -> str:
@@ -542,9 +542,9 @@ class MultiConfigHanoiEnvironment:
             logging.error(f"Error calling env.seed(): {e}")
         
         # Initialize detectors
-        self.detector_simple = CubeSortingDetector(self.env)
-        self.detector_ground = CubeSortingDetector(self.env)
-        
+        self.detector_simple = AssemblyLineSortingDetector(self.env)
+        self.detector_ground = AssemblyLineSortingDetector(self.env)
+
         # Setup PDDL path
         # Use 'hanoi' for PDDL path since Hanoi4x3 uses the same PDDL as Hanoi
         pddl_env_name = 'hanoi' if self.args.env_name.lower() == 'hanoi4x3' else self.args.env_name.lower()
@@ -576,10 +576,10 @@ class MultiConfigHanoiEnvironment:
             
             # Reinitialize detectors after reset
             logging.info("Initializing detectors...")
-            self.detector_simple = CubeSortingDetector(self.env)
+            self.detector_simple = AssemblyLineSortingDetector(self.env)
             logging.info("Simple detector initialized")
-            
-            self.detector_ground = CubeSortingDetector(self.env)
+
+            self.detector_ground = AssemblyLineSortingDetector(self.env)
             logging.info(f"Ground detector initialized with objects: {self.detector_ground.objects}")
             
             # Generate a new plan using the recorder
