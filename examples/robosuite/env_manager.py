@@ -97,27 +97,48 @@ class EnvManager:
                 logging.warning(f"Required camera '{cam}' not in requested camera_names. Adding it.")
                 self.args.camera_names.append(cam)
         
-        # Create environment with multi-config support
-        self.env = suite.make(
-            env_name=self.args.env,
-            robots=self.args.robots,
-            controller_configs=controller_config,
-            has_renderer=has_renderer,
-            has_offscreen_renderer=has_offscreen,
-            control_freq=20,  # Robosuite default
-            horizon=self.args.horizon,
-            use_object_obs=True,  # Get state observations
-            use_camera_obs=True,  # Get camera observations
-            camera_names=self.args.camera_names,
-            camera_heights=self.args.camera_height,
-            camera_widths=self.args.camera_width,
-            render_camera="agentview" if has_renderer else None,
-            ignore_done=True,  # Let horizon end the episode
-            hard_reset=False,  # Faster resets can sometimes be unstable, switch if needed
-            # random_block_placement=self.args.random_block_placement,
-            # random_block_selection=self.args.random_block_selection,
-            # cube_init_pos_noise_std=self.args.cube_init_pos_noise_std
-        )
+        if self.args.env[:5] == "Hanoi":
+            self.env = suite.make(
+                env_name=self.args.env,
+                robots=self.args.robots,
+                controller_configs=controller_config,
+                has_renderer=has_renderer,
+                has_offscreen_renderer=has_offscreen,
+                control_freq=20,  # Robosuite default
+                horizon=self.args.horizon,
+                use_object_obs=True,  # Get state observations
+                use_camera_obs=True,  # Get camera observations
+                camera_names=self.args.camera_names,
+                camera_heights=self.args.camera_height,
+                camera_widths=self.args.camera_width,
+                render_camera="agentview" if has_renderer else None,
+                ignore_done=True,  # Let horizon end the episode
+                hard_reset=False,  # Faster resets can sometimes be unstable, switch if needed
+                peg_xy_jitter=self.args.peg_xy_jitter,
+                # random_block_placement=self.args.random_block_placement,
+                # random_block_selection=self.args.random_block_selection,
+                # cube_init_pos_noise_std=self.args.cube_init_pos_noise_std
+            )
+        else:
+            # Create environment with multi-config support
+            self.env = suite.make(
+                env_name=self.args.env,
+                robots=self.args.robots,
+                controller_configs=controller_config,
+                has_renderer=has_renderer,
+                has_offscreen_renderer=has_offscreen,
+                control_freq=20,  # Robosuite default
+                horizon=self.args.horizon,
+                use_object_obs=True,  # Get state observations
+                use_camera_obs=True,  # Get camera observations
+                camera_names=self.args.camera_names,
+                camera_heights=self.args.camera_height,
+                camera_widths=self.args.camera_width,
+                render_camera="agentview" if has_renderer else None,
+                ignore_done=True,  # Let horizon end the episode
+                hard_reset=False,  # Faster resets can sometimes be unstable, switch if needed
+                cube_placement_noise=self.args.cube_placement_noise,
+            )
         
         # logging.info(f"Environment created with random_block_placement={self.args.random_block_placement}, random_block_selection={self.args.random_block_selection}")
         
