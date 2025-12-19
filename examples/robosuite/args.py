@@ -15,8 +15,8 @@ class Args:
     log_every_n_seconds: float = 0.5                    # Logging interval for W&B settings
 
     # --- Robosuite Environment ---
-    env: str = "CubeSorting"             # Robotsuite environment name
-    end_to_end_prompt: str = "Sort the cubes by size and color."
+    env: str = "Hanoi"             # Robotsuite environment name
+    end_to_end_prompt: str = "Play Towers of Hanoi."
     robots: str = "Kinova3"              # Robot model to use
     controller: str = "OSC_POSE"         # Robosuite controller name
     peg_xy_jitter: float = 0.0225        # Hanoi specific; changes tower spawn location

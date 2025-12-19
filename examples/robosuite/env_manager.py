@@ -272,7 +272,7 @@ class EnvManager:
         
         # Setup PDDL path
         # Use dedicated PDDL directory for Hanoi4x3 so cube4 is properly declared
-        pddl_env_name = 'hanoi4x3' if self.args.env_name.lower() == 'hanoi4x3' else self.args.env_name.lower()
+        pddl_env_name = 'hanoi4x3' if self.args.env.lower() == 'hanoi4x3' else self.args.env.lower()
         self.pddl_path = os.path.join('/app/planning', 'PDDL', pddl_env_name)
         # uncoment the line below if running without docker
         # self.pddl_path = os.path.join('/home/hrilab/Documents/.vlas/cycliclxm-slim/CyclicLxM/planning/', 'PDDL', self.args.env.lower())
