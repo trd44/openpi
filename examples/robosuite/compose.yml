@@ -25,9 +25,11 @@ services:
     environment:
       - PYTHONPATH=/robosuite_source:${PYTHONPATH}
       - PYTHONPATH=/robosuite_source:/app:/app/packages/openpi-client/src:/app/third_party/libero
-      - WANDB_API_KEY=${WANDB_API_KEY}
+      - WANDB_API_KEY
+      - WANDB_MODE
       - DISPLAY=$DISPLAY
-      - NVIDIA_DRIVER_CAPABILITIES=all
+      - NVIDIA_DRIVER_CAPABILITIES=graphics,compute,utility
+      - MUJOCO_GL=osmesa
     deploy:
       resources:
         reservations:
@@ -36,7 +38,6 @@ services:
               count: 1
               # --> FIX: Add 'graphics', 'compute', 'utility' <--
               capabilities: [gpu, graphics, compute, utility] # Or use [all] for testing
-
   openpi_server:
     # ... (Keep the openpi_server definition as is, its capabilities: [gpu] is likely fine) ...
     image: openpi_server
@@ -46,12 +47,16 @@ services:
     init: true
     tty: true
     network_mode: host
+    runtime: nvidia
+    privileged: true
     volumes:
       - $PWD:/app
       - ${OPENPI_DATA_HOME:-~/.cache/openpi}:/openpi_assets
     environment:
-      # - SERVER_ARGS=policy:checkpoint --policy.config pi0_cube_sorting_lora --policy.dir /app/checkpoints/pi0_cube_sorting_lora/cube_sorting/29999
-      - SERVER_ARGS=policy:checkpoint --policy.config pi0_hanoi_50_lora --policy.dir /app/checkpoints/pi0_hanoi_50_lora/hanoi_50_ja_no_mask_50ah/29999
+      - SERVER_ARGS=policy:checkpoint --policy.config pi0_cube_sorting_lora --policy.dir /app/checkpoints/pi0_cube_sorting_lora/pi0_cube_sorting_lora/29999
+      # - SERVER_ARGS=policy:checkpoint --policy.config pi0_cube_sorting_merged --policy.dir /app/checkpoints/pi0_cube_sorting_merged
+      # - SERVER_ARGS=policy:checkpoint --policy.config pi05_hanoi_50_lora --policy.dir /app/checkpoints/pi05_hanoi_50_lora/pi05_hanoi_50_lora/29999
+      # - SERVER_ARGS=policy:checkpoint --policy.config pi0_assembly_line_sorting_lora --policy.dir /app/checkpoints/pi0_assembly_line_sorting_lora/pi0_assembly_line_sorting/29999
       - OPENPI_DATA_HOME=/openpi_assets
       - IS_DOCKER=true
     deploy:
@@ -60,4 +65,27 @@ services:
           devices:
             - driver: nvidia
               count: 1
-              capabilities: [gpu]
+              capabilities: [gpu, compute, utility]
+  # openpi_server:
+  #   # ... (Keep the openpi_server definition as is, its capabilities: [gpu] is likely fine) ...
+  #   image: openpi_server
+  #   build:
+  #     context: ../..
+  #     dockerfile: scripts/docker/serve_policy.Dockerfile
+  #   init: true
+  #   tty: true
+  #   network_mode: host
+  #   volumes:
+  #     - $PWD:/app
+  #     - ${OPENPI_DATA_HOME:-~/.cache/openpi}:/openpi_assets
+  #   environment:
+  #     # - SERVER_ARGS=policy:checkpoint --policy.config pi0_hanoi_50_lora --policy.dir /app/checkpoints/pi0_hanoi_50_lora/hanoi_50_ja_no_mask_50ah/29999
+  #     - OPENPI_DATA_HOME=/openpi_assets
+  #     - IS_DOCKER=true
+  #   deploy:
+  #     resources:
+  #       reservations:
+  #         devices:
+  #           - driver: nvidia
+  #             count: 1
+  #             capabilities: [gpu]

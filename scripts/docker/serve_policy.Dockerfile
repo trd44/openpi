@@ -31,4 +31,10 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=packages/openpi-client/src,target=packages/openpi-client/src \
     GIT_LFS_SKIP_SMUDGE=1 uv sync --frozen --no-install-project --no-dev
 
+# Explicitly reinstall jaxlib with CUDA 12 support to ensure GPU detection works
+# This fixes issues where jaxlib might not have CUDA support properly configured
+# Use the venv's python with -m pip to reinstall jax with CUDA support
+# RUN $UV_PROJECT_ENVIRONMENT/bin/python -m ensurepip --upgrade && \
+#     $UV_PROJECT_ENVIRONMENT/bin/python -m pip install --upgrade --force-reinstall --no-cache-dir "jax[cuda12]==0.5.3"
+
 CMD /bin/bash -c "uv run scripts/serve_policy.py $SERVER_ARGS"
