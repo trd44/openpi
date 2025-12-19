@@ -26,7 +26,33 @@ from robosuite.utils.detector import (
 
 from args import Args
 
-class MultiConfigHanoiEnvironment:
+# Map env_name -> detector implementation.
+# Keep keys lowercase for easy normalization.
+_DETECTOR_BY_ENV_NAME = {
+    # Robosuite task names (common)
+    "hanoi": HanoiDetector,
+    "hanoi4x3": HanoiDetector,  # shares the same detector logic
+    "kitchenenv": KitchenDetector,
+    "kitchen": KitchenDetector,
+    "nutassembly": NutAssemblyDetector,
+    "cubesorting": CubeSortingDetector,
+    "heightstacking": HeightStackingDetector,
+    "assemblylinesorting": AssemblyLineSortingDetector,
+    "patternreplication": PatternReplicationDetector,
+}
+
+# Planning predicates and modes (used by _generate_plan)
+PLANNING_PREDICATES = {
+    "Hanoi": ["on", "clear", "grasped", "smaller"],
+    "Hanoi4x3": ["on", "clear", "grasped", "smaller"],
+    "KitchenEnv": ["on", "clear", "grasped", "stove_on"],
+    "NutAssembly": ["on", "clear", "grasped"],
+}
+
+# Planner mode selection by environment (passed into planning/planner.py)
+PLANNING_MODE = {"Hanoi": 0, "Hanoi4x3": 0, "KitchenEnv": 1, "NutAssembly": 0}
+
+class EnvManager:
     """Manages the Robosuite Hanoi environment setup with multi-configuration support."""
     
     def __init__(self, args: Args):
@@ -36,6 +62,23 @@ class MultiConfigHanoiEnvironment:
         self.detector_ground = None
         self.tasks = None
         self.recorder = None
+
+    def _get_detector_cls(self):
+        env_key = (self.args.env or "").strip().lower()
+        detector_cls = _DETECTOR_BY_ENV_NAME.get(env_key)
+        if detector_cls is None:
+            supported = ", ".join(sorted(_DETECTOR_BY_ENV_NAME.keys()))
+            raise ValueError(
+                f"Unsupported env_name={self.args.env!r} for detector selection. "
+                f"Supported env_name values (case-insensitive): {supported}"
+            )
+        return detector_cls
+
+    def _init_detectors(self) -> None:
+        """Initialize both detectors based on args.env."""
+        detector_cls = self._get_detector_cls()
+        self.detector_simple = detector_cls(self.env)
+        self.detector_ground = detector_cls(self.env)
         
     def setup(self) -> None:
         """Initialize the environment and detectors."""
@@ -56,7 +99,7 @@ class MultiConfigHanoiEnvironment:
         
         # Create environment with multi-config support
         self.env = suite.make(
-            env_name=self.args.env_name,
+            env_name=self.args.env,
             robots=self.args.robots,
             controller_configs=controller_config,
             has_renderer=has_renderer,
@@ -76,7 +119,7 @@ class MultiConfigHanoiEnvironment:
             # cube_init_pos_noise_std=self.args.cube_init_pos_noise_std
         )
         
-        logging.info(f"Environment created with random_block_placement={self.args.random_block_placement}, random_block_selection={self.args.random_block_selection}")
+        # logging.info(f"Environment created with random_block_placement={self.args.random_block_placement}, random_block_selection={self.args.random_block_selection}")
         
         # Monkey patch to fix robosuite bug with random_block_selection and random_block_placement
         # The issue is that both methods try to access cubes that don't exist when these flags are True.
@@ -224,16 +267,15 @@ class MultiConfigHanoiEnvironment:
         except Exception as e:
             logging.error(f"Error calling env.seed(): {e}")
         
-        # Initialize detectors
-        self.detector_simple = HanoiDetector(self.env)
-        self.detector_ground = HanoiDetector(self.env)
+        # Initialize detectors based on env_name
+        self._init_detectors()
         
         # Setup PDDL path
         # Use dedicated PDDL directory for Hanoi4x3 so cube4 is properly declared
         pddl_env_name = 'hanoi4x3' if self.args.env_name.lower() == 'hanoi4x3' else self.args.env_name.lower()
         self.pddl_path = os.path.join('/app/planning', 'PDDL', pddl_env_name)
         # uncoment the line below if running without docker
-        # self.pddl_path = os.path.join('/home/hrilab/Documents/.vlas/cycliclxm-slim/CyclicLxM/planning/', 'PDDL', self.args.env_name.lower())
+        # self.pddl_path = os.path.join('/home/hrilab/Documents/.vlas/cycliclxm-slim/CyclicLxM/planning/', 'PDDL', self.args.env.lower())
         if not self.pddl_path.endswith(os.sep):
             self.pddl_path += os.sep
         
@@ -256,11 +298,10 @@ class MultiConfigHanoiEnvironment:
             
             # Reinitialize detectors after reset
             logging.info("Initializing detectors...")
-            self.detector_simple = HanoiDetector(self.env)
-            logging.info("Simple detector initialized")
-            
-            self.detector_ground = HanoiDetector(self.env)
-            logging.info(f"Ground detector initialized with objects: {self.detector_ground.objects}")
+            self._init_detectors()
+            logging.info("Detectors initialized")
+            if hasattr(self.detector_ground, "objects"):
+                logging.info(f"Detector objects: {self.detector_ground.objects}")
             
             # Generate a new plan using the recorder
             logging.info("Generating plan...")
@@ -294,7 +335,7 @@ class MultiConfigHanoiEnvironment:
             # Include all relevant predicates
             init_predicates = {}
             for predicate, value in state.items():
-                if predicate.split('(')[0] in PLANNING_PREDICATES[self.args.env_name]:
+                if predicate.split('(')[0] in PLANNING_PREDICATES[self.args.env]:
                     init_predicates[predicate] = value
             
             # Filter predicates to only include those involving active cubes
@@ -347,7 +388,7 @@ class MultiConfigHanoiEnvironment:
             add_predicates_to_pddl(self.pddl_path, filtered_predicates, detected_objects=detected_objects)
             
             # Generate plan
-            plan, _ = call_planner(self.pddl_path, problem="problem_save.pddl", mode=PLANNING_MODE[self.args.env_name])
+            plan, _ = call_planner(self.pddl_path, problem="problem_save.pddl", mode=PLANNING_MODE[self.args.env])
             
             print(f"Generated plan: {plan}")
             return plan if plan else []

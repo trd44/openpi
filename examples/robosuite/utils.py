@@ -8,44 +8,6 @@ import psutil
 import time
 import logging
 
-def _quat2axisangle(quat: np.ndarray) -> np.ndarray:
-    """
-    Convert quaternion to axis-angle representation.
-    Copied from robosuite: 
-    https://github.com/ARISE-Initiative/robosuite/blob/eafb81f54ffc104f905ee48a1
-    6bb15f059176ad3/robosuite/utils/transform_utils.py#L490C1-L512C55
-    """
-    # clip quaternion
-    if quat[3] > 1.0:
-        quat[3] = 1.0
-    elif quat[3] < -1.0:
-        quat[3] = -1.0
-
-    den = np.sqrt(1.0 - quat[3] * quat[3])
-    if math.isclose(den, 0.0):
-        # This is (close to) a zero degree rotation, immediately return
-        return np.zeros(3)
-
-    return (quat[:3] * 2.0 * math.acos(quat[3])) / den
-
-
-# def quaternion_to_euler(quat: np.ndarray) -> np.ndarray:
-#     """Convert a quaternion (x, y, z, w) to Euler angles (roll, pitch, yaw)."""
-#     x, y, z, w = quat
-#     # Roll (x-axis rotation)
-#     sinr_cosp = 2 * (w * x + y * z)
-#     cosr_cosp = 1 - 2 * (x * x + y * y)
-#     roll = np.arctan2(sinr_cosp, cosr_cosp)
-#     # Pitch (y-axis rotation)
-#     sinp = 2 * (w * y - z * x)
-#     pitch = np.arcsin(np.clip(sinp, -1.0, 1.0))
-#     # Yaw (z-axis rotation)
-#     siny_cosp = 2 * (w * z + x * y)
-#     cosy_cosp = 1 - 2 * (y * y + z * z)
-#     yaw = np.arctan2(siny_cosp, cosy_cosp)
-#     return np.array([roll, pitch, yaw], dtype=np.float32)
-
-
 # ------------------------------------------------------------------------------
 # System monitoring functions
 # ------------------------------------------------------------------------------
@@ -219,11 +181,7 @@ def calculate_energy_consumption(power_data_points):
 def generate_video_filename(args, episode: int) -> str:
     """Generate video filename based on current arguments and episode number
     """
-    env = args.env_name
+    env = args.env
     date = time.strftime('%Y%m%d')
     timestamp = time.strftime('%H%M%S')
     return f"{env}/{date}/{env}_{timestamp}_seed{args.seed}_ep{episode+1}.mp4"
-
-def generate_wandb_run_name(args, episode: int) -> str:
-    """Generate W&B run name based on current arguments and episode number."""
-    return f"{args.env_name}_seed{args.seed}_ep{episode+1}_{time.strftime('%H%M%S')}"

@@ -15,6 +15,60 @@ import openpi.training.config as _config
 from openpi.training.droid_rlds_dataset import DroidRldsDataset
 import openpi.transforms as _transforms
 
+
+# def _patch_datasets_list_feature():
+#     """Patch datasets library to handle deprecated 'List' feature type.
+    
+#     The 'List' feature type was deprecated in favor of 'Sequence' or 'LargeList'.
+#     This function patches the generate_from_dict method to automatically convert
+#     'List' to 'Sequence' when loading datasets with old metadata.
+#     """
+#     try:
+#         import datasets.features.features as features_module
+        
+#         # Only patch once
+#         if hasattr(features_module, '_list_patch_applied'):
+#             return
+        
+#         # Helper function to recursively convert 'List' to 'Sequence'
+#         def convert_list_to_sequence(item):
+#             """Recursively convert 'List' feature type to 'Sequence'."""
+#             if isinstance(item, dict):
+#                 # If this dict has a _type field with value "List", convert it
+#                 if "_type" in item and item["_type"] == "List":
+#                     converted = dict(item)
+#                     converted["_type"] = "Sequence"
+#                     # Recursively process nested structures
+#                     if "feature" in converted:
+#                         converted["feature"] = convert_list_to_sequence(converted["feature"])
+#                     return converted
+#                 else:
+#                     # Recursively process all values in the dict
+#                     return {k: convert_list_to_sequence(v) for k, v in item.items()}
+#             elif isinstance(item, (list, tuple)):
+#                 return type(item)(convert_list_to_sequence(i) for i in item)
+#             else:
+#                 return item
+        
+#         # Store original function
+#         original_generate_from_dict = features_module.generate_from_dict
+        
+#         def patched_generate_from_dict(obj):
+#             """Convert 'List' to 'Sequence' in feature definitions before processing."""
+#             converted_obj = convert_list_to_sequence(obj)
+#             return original_generate_from_dict(converted_obj)
+        
+#         # Apply the patch
+#         features_module.generate_from_dict = patched_generate_from_dict
+#         features_module._list_patch_applied = True
+#     except (ImportError, AttributeError):
+#         # If datasets is not available or structure changed, nothing to patch
+#         pass
+
+
+# # Apply the patch at module import time to ensure it's active before any dataset loading
+# _patch_datasets_list_feature()
+
 T_co = TypeVar("T_co", covariant=True)
 
 

@@ -4,7 +4,6 @@
 import numpy as np
 
 from typing import Dict, Any
-from utils import _quat2axisangle
 
 from openpi_client import image_tools
 
@@ -70,17 +69,6 @@ class ObsProcessor:
 
         # State is the concatenation of joint state and gripper opening
         state = np.concatenate((joint_state, eef_gripper)).astype(np.float32)
-        
-        # Process state
-        eef_pos = obs.get('robot0_eef_pos', np.zeros(3, dtype=np.float32))
-        eef_quat = obs.get('robot0_eef_quat', np.array([0., 0., 0., 1.], dtype=np.float32))
-        # eef_gripper = obs.get('robot0_gripper_qpos', np.zeros(2, dtype=np.float32))
-        
-        # # Convert quaternion to axis angle
-        eef_axis_angle = _quat2axisangle(eef_quat)
-        # eef_state = np.concatenate((eef_pos, eef_axis_angle, eef_gripper)).astype(np.float32)
-        eef_state = np.concatenate((eef_pos, eef_axis_angle, eef_gripper, np.array([0.0], dtype=np.float32))).astype(np.float32)
-
         
         return {
             "image": img,

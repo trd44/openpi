@@ -4,6 +4,7 @@ Main script for running Robosuite with OpenPI policy server.
 import collections
 import dataclasses
 import logging
+import os
 import pathlib
 import time
 from args import Args
@@ -15,52 +16,68 @@ import tyro
 
 from openpi_client import websocket_client_policy as _websocket_client_policy
 
-from multi_config_hanoi_environmnet import MultiConfigHanoiEnvironment
+from env_manager import EnvManager
 from obs_processor import ObsProcessor
 from task_manager import TaskManager
 from utils import (
     get_system_metrics,
     calculate_energy_consumption,
-    generate_video_filename,
-    generate_wandb_run_name
+    generate_video_filename
 )
 
-# ------------------------------------------------------------------------------
-# Constants and Configuration
-# ------------------------------------------------------------------------------
-# Task configuration
-COLOR2OBJ = {
-    "blue": "cube1", "red": "cube2", "green": "cube3", "yellow": "cube4"}
-AREA2PEG = {"left": "peg1", "middle": "peg2", "right": "peg3"}
+def _resolve_wandb_mode() -> str:
+    """
+    Resolve the W&B mode to avoid interactive login prompts in headless / docker runs.
 
-# Planning predicates and modes
-PLANNING_PREDICATES = {
-    "Hanoi": ['on', 'clear', 'grasped', 'smaller'],
-    "Hanoi4x3": ['on', 'clear', 'grasped', 'smaller'],
-    "KitchenEnv": ['on', 'clear', 'grasped', 'stove_on'],
-    "NutAssembly": ['on', 'clear', 'grasped'],
-}
-PLANNING_MODE = {"Hanoi": 0, "Hanoi4x3": 0, "KitchenEnv": 1, "NutAssembly": 0}
+    - If WANDB_MODE is explicitly set, respect it.
+    - Otherwise, default to "online".
+    """
+    explicit = os.getenv("WANDB_MODE")
+    if explicit:
+        return explicit
+
+    return "online"
+
+
+def _validate_wandb_config(wandb_mode: str) -> None:
+    """
+    Fail fast instead of blocking on W&B's interactive login prompt.
+
+    We do NOT auto-disable W&B. If you want to run without W&B, explicitly set
+    WANDB_MODE=disabled (or WANDB_MODE=offline).
+    """
+    mode = (wandb_mode or "").strip().lower()
+    if mode not in {"online", "offline", "disabled"}:
+        raise ValueError(f"Unsupported WANDB_MODE={wandb_mode!r}. Expected one of: online, offline, disabled.")
+
+    if mode == "online":
+        api_key = os.getenv("WANDB_API_KEY", "").strip()
+        if not api_key:
+            raise RuntimeError(
+                "WANDB_API_KEY is not set, but WANDB_MODE resolves to 'online'.\n"
+                "Set WANDB_API_KEY to enable W&B logging, or explicitly set WANDB_MODE=offline/disabled.\n"
+                "This script refuses to block on W&B's interactive login prompt."
+            )
 
 
 def main(args: Args) -> None:
     """Runs a Robosuite environment controlled by an OpenPI policy server."""
-    logging.info(f"Running Robosuite env '{args.env_name}' with OpenPI server at {args.host}:{args.port}")
+    logging.info(f"Running Robosuite env '{args.env}' with OpenPI server at {args.host}:{args.port}")
     logging.info(f"Rendering mode: {args.render_mode}")
-    # logging.info(f"Multi-config settings: random_block_placement={args.random_block_placement}, 
-    # random_block_selection={args.random_block_selection}")
     
     # Initialize W&B
+    wandb_mode = _resolve_wandb_mode()
+    _validate_wandb_config(wandb_mode)
     settings = wandb.Settings(_stats_sampling_interval=args.log_every_n_seconds)
-    group_name = f"multi_config_hanoi_{time.strftime('%Y%m%d-%H%M%S')}"
+    wandb_proj_name = f"{args.wandb_project_prefix}_{args.env}"
+    wandb_group_name = f"{args.env}_{args.episodes}eps_seed{args.seed}_{time.strftime('%Y%m%d-%H%M%S')}"
     
     # Setup environment manager
-    env_manager = MultiConfigHanoiEnvironment(args)
+    env_manager = EnvManager(args)
     env_manager.setup()
 
     # Setup task manager
-    task_manager = TaskManager(env_manager.tasks, args.planner_guided, 
-                              args.time_based_progression, args.task_timeout)
+    task_manager = TaskManager(args, env_manager.tasks)
 
     # Setup observation preprocessor
     obs_processor = ObsProcessor(args.resize_size, env_manager)
@@ -68,22 +85,15 @@ def main(args: Args) -> None:
     # Log the mode being used
     if args.planner_guided:
         logging.info(f"Running in PLANNER GUIDED MODE")
-        if args.time_based_progression:
-            logging.info(
-                f"Subtasks will progress automatically after \
-                {args.task_timeout} steps timeout"
-            )
-        else:
-            logging.info(
-                f"Subtasks will progress automatically as they are \
-                achieved, but episode will terminate early if any subtask \
-                takes longer than {args.task_timeout} steps"
-            )
+        logging.info(
+            f"Subtasks will progress automatically as they are \
+            achieved, but episode will terminate early if any subtask \
+            takes longer than {args.task_timeout} steps"
+        )
     else:
         logging.info("Running in END-TO-END MODE")
         logging.info(f"Using fixed prompt: {task_manager.single_prompt} for all steps")
-        if not args.time_based_progression:
-            logging.info(f"Episode will terminate early if any task takes longer than {args.task_timeout} steps")    
+        logging.info(f"Episode will terminate early if any task takes longer than {args.task_timeout} steps")    
     
     # Setup websocket client
     logging.debug(f"Connecting to OpenPI server at ws://{args.host}:{args.port}...")
@@ -93,15 +103,17 @@ def main(args: Args) -> None:
     # Run episodes
     for ep in range(args.episodes):
         logging.info(f"\n=========  EPISODE {ep+1}/{args.episodes}  =========")
+
+        wandb_run_name = f"{args.env}_{ep+1}ep_{time.strftime('%Y%m%d-%H%M%S')}"
         
         # Initialize W&B run for this episode
-        run_name = generate_wandb_run_name(args, ep)
         wandb_run = wandb.init(
-            project=args.wandb_project,
-            name=run_name,
-            group=group_name,
+            project=wandb_proj_name,
+            name=wandb_run_name,
+            group=wandb_group_name,
             config=dataclasses.asdict(args),
             settings=settings,
+            mode=wandb_mode,
         )
         
         # Setup video recording
@@ -165,7 +177,7 @@ def main(args: Args) -> None:
             loop_start_time = time.time()
             
             # Skip initial steps if needed
-            if t < args.skip_steps:
+            if t < args.settle_steps:
                 action = np.zeros(env_manager.env.action_dim)
                 if env_manager.env.robots[0].gripper.dof > 0:
                     action[6] = -1.0  # Keep gripper closed
@@ -308,7 +320,7 @@ def main(args: Args) -> None:
                     logging.info(f"🎉 Episode completed! Final score: {task_manager.episode_score}")
                     break
             
-            # Check task timeout (always check, behavior depends on time_based_progression setting)
+            # Check task timeout
             if task_manager.check_task_timeout(t):
                 # Log task timeout
                 wandb.log(

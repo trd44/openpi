@@ -92,6 +92,9 @@ class DataConfig:
     rlds_data_dir: str | None = None
     # Action space for DROID dataset.
     action_space: droid_rlds_dataset.DroidActionSpace | None = None
+    
+    # If true, will prevent downloading from Hugging Face and use only locally cached datasets
+    offline_mode: bool = False
 
 
 class GroupFactory(Protocol):
@@ -883,35 +886,6 @@ _CONFIGS = [
         # num_workers=0,
     ),
     TrainConfig(
-        name="pi0_cube_sorting_lora",
-        # Here is an example of loading a pi0 model for LoRA fine-tuning.
-        model=pi0.Pi0Config(
-            action_horizon=10,
-            paligemma_variant="gemma_2b_lora",
-            action_expert_variant="gemma_300m_lora",
-        ),
-        data=LeRobotLiberoDataConfig(
-            repo_id="tduggan93/cube_sorting",
-            base_config=DataConfig(
-                prompt_from_task=True,
-            ),
-        ),
-        weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi0_base/params"),
-        num_train_steps=30_000,
-        batch_size=16,  # Reduced from default 32 to save memory
-        # The freeze filter defines which parameters should be frozen during training.
-        # We have a convenience function in the model config that returns the default freeze filter
-        # for the given model config for LoRA finetuning. Just make sure it matches the model config
-        # you chose above.
-        freeze_filter=pi0.Pi0Config(
-            paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"
-        ).get_freeze_filter(),
-        # Turn off EMA for LoRA finetuning.
-        ema_decay=None,
-        instruction_override="Sort the cubes by color.",
-        # num_workers=0,
-    ),
-    TrainConfig(
         name="pi0_hanoi_50_lora",
         # Here is an example of loading a pi0 model for LoRA fine-tuning.
         model=pi0.Pi0Config(
@@ -932,12 +906,108 @@ _CONFIGS = [
         # for the given model config for LoRA finetuning. Just make sure it matches the model config
         # you chose above.
         freeze_filter=pi0.Pi0Config(
-            paligemma_variant="gemma_2b_lora", 
-            action_expert_variant="gemma_300m_lora"
+            paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"
         ).get_freeze_filter(),
         # Turn off EMA for LoRA finetuning.
         ema_decay=None,
-        instruction_override="Play Towers of Hanoi.",
+        instruction_override="Sort the cubes by color.",
+        # num_workers=0,
+    ),
+
+    TrainConfig(
+        name="pi0_height_stacking_lora",
+        # Here is an example of loading a pi0 model for LoRA fine-tuning.
+        model=pi0.Pi0Config(
+            paligemma_variant="gemma_2b_lora",
+            action_expert_variant="gemma_300m_lora",
+        ),
+        data=LeRobotLiberoDataConfig(
+            repo_id="tduggan93/height_stacking",
+            assets=AssetsConfig(
+                asset_id="tduggan93/height_stacking",  # This should match the assets directory structure
+            ),
+            base_config=DataConfig(
+                prompt_from_task=True,
+                offline_mode=True,  # Use only locally cached datasets, don't download from HuggingFace
+            ),
+        ),
+        weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi0_base/params"),
+        num_train_steps=30_000,
+        batch_size=16,  # Reduced from default 32 to save memory
+        # The freeze filter defines which parameters should be frozen during training.
+        # We have a convenience function in the model config that returns the default freeze filter
+        # for the given model config for LoRA finetuning. Just make sure it matches the model config
+        # you chose above.
+        freeze_filter=pi0.Pi0Config(
+            paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"
+        ).get_freeze_filter(),
+        # Turn off EMA for LoRA finetuning.
+        ema_decay=None,
+        instruction_override="Assemble the block tower.",
+        # num_workers=0,
+    ),
+    TrainConfig(
+        name="pi0_cube_sorting_lora",
+        # Here is an example of loading a pi0 model for LoRA fine-tuning.
+        model=pi0.Pi0Config(
+            paligemma_variant="gemma_2b_lora",
+            action_expert_variant="gemma_300m_lora",
+        ),
+        data=LeRobotLiberoDataConfig(
+            repo_id="tduggan93/cube_sorting",
+            assets=AssetsConfig(
+                asset_id="tduggan93/cube_sorting",  # This should match the assets directory structure
+            ),
+            base_config=DataConfig(
+                prompt_from_task=True,
+                offline_mode=True,  # Use only locally cached datasets, don't download from HuggingFace
+            ),
+        ),
+        weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi0_base/params"),
+        num_train_steps=30_000,
+        batch_size=16,  # Reduced from default 32 to save memory
+        # The freeze filter defines which parameters should be frozen during training.
+        # We have a convenience function in the model config that returns the default freeze filter
+        # for the given model config for LoRA finetuning. Just make sure it matches the model config
+        # you chose above.
+        freeze_filter=pi0.Pi0Config(
+            paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"
+        ).get_freeze_filter(),
+        # Turn off EMA for LoRA finetuning.
+        ema_decay=None,
+        instruction_override="Sort the cubes by size and color.",
+        # num_workers=0,
+    ),
+    TrainConfig(
+        name="pi0_cube_sorting_merged",
+        # Here is an example of loading a pi0 model for LoRA fine-tuning.
+        model=pi0.Pi0Config(
+            paligemma_variant="gemma_2b",
+            action_expert_variant="gemma_300m",
+        ),
+        data=LeRobotLiberoDataConfig(
+            repo_id="tduggan93/cube_sorting",
+            assets=AssetsConfig(
+                asset_id="tduggan93/cube_sorting",  # This should match the assets directory structure
+            ),
+            base_config=DataConfig(
+                prompt_from_task=True,
+                offline_mode=True,  # Use only locally cached datasets, don't download from HuggingFace
+            ),
+        ),
+        weight_loader=weight_loaders.CheckpointWeightLoader("/home/train/vla/CyclicLxM/openpi/checkpoints/pi0_cube_sorting_merged/params"),
+        num_train_steps=30_000,
+        batch_size=16,  # Reduced from default 32 to save memory
+        # The freeze filter defines which parameters should be frozen during training.
+        # We have a convenience function in the model config that returns the default freeze filter
+        # for the given model config for LoRA finetuning. Just make sure it matches the model config
+        # you chose above.
+        freeze_filter=pi0.Pi0Config(
+            paligemma_variant="gemma_2b", action_expert_variant="gemma_300m"
+        ).get_freeze_filter(),
+        # Turn off EMA for LoRA finetuning.
+        ema_decay=None,
+        instruction_override="Sort the cubes by size and color.",
         # num_workers=0,
     ),
     TrainConfig(
