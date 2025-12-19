@@ -9,7 +9,7 @@ class TaskManager:
     
     def __init__(self, tasks: List[Dict[str, Any]], use_sequential_tasks: bool = False, 
                  time_based_progression: bool = False, task_timeout: int = 200):
-        self.single_prompt = "Play Towers of Hanoi."
+        self.single_prompt = "Stack the cubes from largest to smallest on the platform."
         self.tasks = tasks
         self.use_sequential_tasks = use_sequential_tasks
         self.time_based_progression = time_based_progression

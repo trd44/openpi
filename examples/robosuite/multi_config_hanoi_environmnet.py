@@ -225,8 +225,8 @@ class MultiConfigHanoiEnvironment:
             logging.error(f"Error calling env.seed(): {e}")
         
         # Initialize detectors
-        self.detector_simple = HanoiDetector(self.env)
-        self.detector_ground = HanoiDetector(self.env)
+        self.detector_simple = HeightStackingDetector(self.env)
+        self.detector_ground = HeightStackingDetector(self.env)
         
         # Setup PDDL path
         # Use 'hanoi' for PDDL path since Hanoi4x3 uses the same PDDL as Hanoi
@@ -256,10 +256,10 @@ class MultiConfigHanoiEnvironment:
             
             # Reinitialize detectors after reset
             logging.info("Initializing detectors...")
-            self.detector_simple = HanoiDetector(self.env)
+            self.detector_simple = HeightStackingDetector(self.env)
             logging.info("Simple detector initialized")
             
-            self.detector_ground = HanoiDetector(self.env)
+            self.detector_ground = HeightStackingDetector(self.env)
             logging.info(f"Ground detector initialized with objects: {self.detector_ground.objects}")
             
             # Generate a new plan using the recorder
