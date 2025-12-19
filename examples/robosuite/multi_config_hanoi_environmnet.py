@@ -229,8 +229,8 @@ class MultiConfigHanoiEnvironment:
         self.detector_ground = HanoiDetector(self.env)
         
         # Setup PDDL path
-        # Use 'hanoi' for PDDL path since Hanoi4x3 uses the same PDDL as Hanoi
-        pddl_env_name = 'hanoi' if self.args.env_name.lower() == 'hanoi4x3' else self.args.env_name.lower()
+        # Use dedicated PDDL directory for Hanoi4x3 so cube4 is properly declared
+        pddl_env_name = 'hanoi4x3' if self.args.env_name.lower() == 'hanoi4x3' else self.args.env_name.lower()
         self.pddl_path = os.path.join('/app/planning', 'PDDL', pddl_env_name)
         # uncoment the line below if running without docker
         # self.pddl_path = os.path.join('/home/hrilab/Documents/.vlas/cycliclxm-slim/CyclicLxM/planning/', 'PDDL', self.args.env_name.lower())
@@ -508,7 +508,7 @@ class MultiConfigHanoiEnvironment:
                 
                 tasks.append({
                     "prompt": f"Pick the {color} block.", 
-                    "done": lambda c=cube: bool(g().get(f"grasped({c})", False)) and self.detector_simple.grasped(colors.get(c, c))
+                    "done": lambda c=cube: bool(g().get(f"grasped({c})", False)) and self.detector_simple.grasped(c)
                 })
                 tasks.append({
                     "prompt": f"Place the {color} block in the {target_peg} area.", 

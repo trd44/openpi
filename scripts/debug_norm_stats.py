@@ -162,7 +162,7 @@ def main(config_name: str):
                 print(f"actions[0] works! Type: {type(actions_0)}, Shape: {actions_0.shape if hasattr(actions_0, 'shape') else 'No shape'}")
             except (TypeError, IndexError) as e:
                 print(f"actions[0] failed: {e}")
-                actions_0 = actions
+            actions_0 = actions
         
         values = np.asarray(actions_0)
         print(f"values (after np.asarray(actions_0)) shape: {values.shape}")
