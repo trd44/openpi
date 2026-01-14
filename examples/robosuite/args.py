@@ -9,7 +9,7 @@ class Args:
     """Arguments for running Robosuite with OpenPI Websocket Policy and multi-config support"""
 
     # --- Experiment Settings ---
-    wandb_project_prefix: str = "FINAL_Kinova3_Journal_Paper"  # W&B project name
+    wandb_project_prefix: str = "FINAL_Kinova3_Journal_Paper_2_Color_BS_Zero_Shot"  # W&B project name
     episodes: int = 50                                         # How many episodes to run
     seed: int = 3                                              # Random seed
     log_every_n_seconds: float = 0.5                           # Logging interval for W&B settings
