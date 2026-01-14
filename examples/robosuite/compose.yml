@@ -57,8 +57,9 @@ services:
       # - SERVER_ARGS=policy:checkpoint --policy.config pi0_hanoi_50_lora --policy.dir /app/checkpoints/pi0_hanoi_50_lora/hanoi_50_ja_no_mask_50ah/29999
       # - SERVER_ARGS=policy:checkpoint --policy.config pi0_hanoi_4x3_50_lora --policy.dir /app/checkpoints/pi0_hanoi_4x3_50_lora/pi0_hanoi_50_4x3_lora/29999
       # - SERVER_ARGS=policy:checkpoint --policy.config pi0_cube_sorting_merged --policy.dir /app/checkpoints/pi0_cube_sorting_merged
+      # - SERVER_ARGS=policy:checkpoint --policy.config pi0_assembly_line_sorting_lora --policy.dir /app/checkpoints/pi0_assembly_line_sorting_lora/pi0_assembly_line_sorting/29999
+      - SERVER_ARGS=policy:checkpoint --policy.config pi0_height_stacking_lora --policy.dir /app/checkpoints/pi0_height_stacking_lora_29999
       # - SERVER_ARGS=policy:checkpoint --policy.config pi05_hanoi_50_lora --policy.dir /app/checkpoints/pi05_hanoi_50_lora/pi05_hanoi_50_lora/29999
-      - SERVER_ARGS=policy:checkpoint --policy.config pi0_assembly_line_sorting_lora --policy.dir /app/checkpoints/pi0_assembly_line_sorting_lora/pi0_assembly_line_sorting/29999
       - OPENPI_DATA_HOME=/openpi_assets
       - IS_DOCKER=true
     deploy:
