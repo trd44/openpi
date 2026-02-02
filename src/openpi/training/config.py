@@ -1065,7 +1065,7 @@ _CONFIGS = [
         ).get_freeze_filter(),
         # Turn off EMA for LoRA finetuning.
         ema_decay=None,
-        instruction_override="Play 4 block Towers of Hanoi.",
+        # instruction_override="",
         # num_workers=0,
     ),
 ]
