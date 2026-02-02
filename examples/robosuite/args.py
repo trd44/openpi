@@ -9,14 +9,14 @@ class Args:
     """Arguments for running Robosuite with OpenPI Websocket Policy and multi-config support"""
 
     # --- Experiment Settings ---
-    wandb_project_prefix: str = "FINAL_Kinova3_Journal_Paper_Zero_Shot_Hanoi_3_to_4"   # W&B project name
+    wandb_project_prefix: str = "FINAL_4_Block_Tower_Stacking"   # W&B project name
     episodes: int = 50                                  # How many episodes to run
     seed: int = 3                                       # Random seed
     log_every_n_seconds: float = 0.5                    # Logging interval for W&B settings
 
     # --- Robosuite Environment ---
-    env: str = "Hanoi4x3"                # Robotsuite environment name
-    end_to_end_prompt: str = "Play Towers of Hanoi."
+    env: str = "HeightStacking"             # Robotsuite environment name
+    end_to_end_prompt: str = "Stack the 4 blocks from largest to smallest on the gray area."
     robots: str = "Kinova3"              # Robot model to use
     controller: str = "OSC_POSE"         # Robosuite controller name
     peg_xy_jitter: float = 0.0           # Hanoi specific; changes tower spawn location
