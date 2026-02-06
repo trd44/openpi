@@ -8,20 +8,18 @@ services:
       dockerfile: examples/robosuite/Dockerfile
     init: true
     tty: true
-    network_mode: host # Keep this for now unless it causes other issues
-    privileged: true # REMOVE or comment out this line (try removing later)
+    network_mode: host
+    privileged: true 
     volumes:
-      - $PWD:/app
+      - $PWD:/app. # openpi
       - ../../data:/data
-      # ---> ADD THIS LINE: Mount your local Robosuite source code <---
-      - ../../../robosuite:/robosuite_source # Host path : Container path
-      - ../../../robosuite-task-zoo:/robosuite_task_zoo_source # Host path : Container path
-      # Mount dataset_making and planning modules
+      - ../../../robosuite:/robosuite_source  # Custom Robosuite envs
+      - ../../../robosuite-task-zoo:/robosuite_task_zoo_source  # Build req
       - ../../../dataset_making:/app/dataset_making
       - ../../../planning:/app/planning
       - ../../../tarski:/tarski
-      - ../../../Metric-FF-v2.1:/app/Metric-FF-v2.1
-      - /tmp/.X11-unix:/tmp/.X11-unix:ro # REMOVE or comment out this line
+      - ../../../Metric-FF-v2.1:/app/Metric-FF-v2.1  # Planner
+      - /tmp/.X11-unix:/tmp/.X11-unix:ro 
     environment:
       - PYTHONPATH=/robosuite_source:${PYTHONPATH}
       - PYTHONPATH=/robosuite_source:/app:/app/packages/openpi-client/src:/app/third_party/libero
@@ -36,10 +34,8 @@ services:
           devices:
             - driver: nvidia
               count: 1
-              # --> FIX: Add 'graphics', 'compute', 'utility' <--
-              capabilities: [gpu, graphics, compute, utility] # Or use [all] for testing
+              capabilities: [gpu, graphics, compute, utility]
   openpi_server:
-    # ... (Keep the openpi_server definition as is, its capabilities: [gpu] is likely fine) ...
     image: openpi_server
     build:
       context: ../..
