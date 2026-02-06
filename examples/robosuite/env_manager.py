@@ -117,8 +117,8 @@ class EnvManager:
                 hard_reset=False,  # Faster resets can sometimes be unstable, switch if needed
                 peg_xy_jitter=self.args.peg_xy_jitter,
                 cube_init_pos_noise_std=self.args.cube_placement_noise,
+                random_block_selection=self.args.random_block_selection,
                 # random_block_placement=self.args.random_block_placement,
-                # random_block_selection=self.args.random_block_selection,
             )
         else:
             # Create environment with multi-config support

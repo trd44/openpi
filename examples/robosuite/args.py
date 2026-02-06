@@ -9,18 +9,18 @@ class Args:
     """Arguments for running Robosuite with OpenPI Websocket Policy and multi-config support"""
 
     # --- Experiment Settings ---
-    wandb_project_prefix: str = "FINAL_4_Block_Tower_Stacking"   # W&B project name
+    wandb_project_prefix: str = "FINAL_Hanoi_E2E"   # W&B project name
     episodes: int = 50                                  # How many episodes to run
     seed: int = 3                                       # Random seed
     log_every_n_seconds: float = 0.5                    # Logging interval for W&B settings
 
     # --- Robosuite Environment ---
-    env: str = "HeightStacking"             # Robotsuite environment name
-    end_to_end_prompt: str = "Stack the 4 blocks from largest to smallest on the gray area."
+    env: str = "Hanoi"             # Robotsuite environment name
+    end_to_end_prompt: str = "Play Towers of Hanoi."
     robots: str = "Kinova3"              # Robot model to use
     controller: str = "OSC_POSE"         # Robosuite controller name
     peg_xy_jitter: float = 0.0           # Hanoi specific; changes tower spawn location
-    cube_placement_noise: float = 0.025  # All other environments; Uniform noise in meters to add to cube x and y positions during spawn
+    cube_placement_noise: float = 0.0225  # All other environments; Uniform noise in meters to add to cube x and y positions during spawn
     settle_steps: int = 50               # Number of steps to wait for objects to settle
     horizon: int = 9050                  # Max steps per episode (includes settle_steps) 9050 = 5 minutes of video at 30fps with 50 settle steps
 
@@ -61,5 +61,5 @@ class Args:
 
     # --- Multi-configuration support --- Currently unused
     # random_block_placement: bool = False # Place blocks on pegs randomly according to Towers of Hanoi rules
-    # random_block_selection: bool = False  # Randomly select 3 out of 4 blocks
+    random_block_selection: bool = True  # Randomly select 3 out of 4 blocks
     # cube_init_pos_noise_std: float = 0.01  # Std dev for XY jitter of initial tower position
