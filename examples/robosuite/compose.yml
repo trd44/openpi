@@ -11,7 +11,7 @@ services:
     network_mode: host
     privileged: true 
     volumes:
-      - $PWD:/app. # openpi
+      - $PWD:/app  # openpi
       - ../../data:/data
       - ../../../robosuite:/robosuite_source  # Custom Robosuite envs
       - ../../../robosuite-task-zoo:/robosuite_task_zoo_source  # Build req
