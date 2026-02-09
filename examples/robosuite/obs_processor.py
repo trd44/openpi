@@ -2,6 +2,7 @@
 # Observation preprocessing
 # --------------------------------------------------------------------------------------
 import numpy as np
+import math
 
 from typing import Dict, Any
 
@@ -56,16 +57,23 @@ class ObsProcessor:
         joint_sin = obs['robot0_joint_pos_sin']
         joint_state = np.arctan2(joint_sin, joint_cos).astype(np.float32)
 
-        left_finger_pos = self.env_manager.env.sim.data.body_xpos[
-            self.env_manager.env.sim.model.body_name2id("gripper0_left_inner_finger")
-        ]
-        right_finger_pos = self.env_manager.env.sim.data.body_xpos[
-            self.env_manager.env.sim.model.body_name2id("gripper0_right_inner_finger")
-        ]
-        gripper_width = float(np.linalg.norm(left_finger_pos - right_finger_pos))
-        
-        # Use the gripper width calculated from actual finger positions in sim
-        eef_gripper = np.array([gripper_width], dtype=np.float32)   
+        # left_finger_pos = self.env_manager.env.sim.data.body_xpos[
+        #     self.env_manager.env.sim.model.body_name2id("gripper0_left_inner_finger")
+        # ]
+        # right_finger_pos = self.env_manager.env.sim.data.body_xpos[
+        #     self.env_manager.env.sim.model.body_name2id("gripper0_right_inner_finger")
+        # ]
+        # gripper_width = float(np.linalg.norm(left_finger_pos - right_finger_pos))
+        eef_pos = obs.get('robot0_eef_pos', np.zeros(3, dtype=np.float32))
+        eef_quat = obs.get('robot0_eef_quat', np.array([0., 0., 0., 1.], dtype=np.float32))
+        eef_axis_angle = _quat2axisangle(eef_quat)
+
+
+        j1 = self.env_manager.env.sim.data.get_joint_qpos("gripper0_finger_joint1")
+        j2 = self.env_manager.env.sim.data.get_joint_qpos("gripper0_finger_joint2")
+        eef_gripper = np.array([j1,j2], dtype=np.float32)    
+
+        eef_state = np.concatenate((eef_pos, eef_axis_angle, eef_gripper)).astype(np.float32)
 
         # State is the concatenation of joint state and gripper opening
         state = np.concatenate((joint_state, eef_gripper)).astype(np.float32)
@@ -73,6 +81,23 @@ class ObsProcessor:
         return {
             "image": img,
             "wrist_image": wrist_img,
-            "state": state,
+            "state": eef_state,
             "raw_agentview": obs["agentview_image"]  # For video recording
         }
+    
+def _quat2axisangle(quat):
+    """
+    Copied from robosuite: 
+    """
+    # clip quaternion
+    if quat[3] > 1.0:
+        quat[3] = 1.0
+    elif quat[3] < -1.0:
+        quat[3] = -1.0
+
+    den = np.sqrt(1.0 - quat[3] * quat[3])
+    if math.isclose(den, 0.0):
+        # This is (close to) a zero degree rotation, immediately return
+        return np.zeros(3)
+
+    return (quat[:3] * 2.0 * math.acos(quat[3])) / den

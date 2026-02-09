@@ -158,8 +158,6 @@ def main(args: Args) -> None:
             use_sequential_tasks={task_manager.use_sequential_tasks}")
         if task_manager.tasks:
             logging.info(f"First task: {task_manager.tasks[0]['prompt']}")
-            if len(task_manager.tasks) > 6:
-                logging.info(f"Task 7: {task_manager.tasks[6]['prompt']}")
         
         # Initial wandb logging
         wandb.log({"score": task_manager.episode_score}, step=global_step)
@@ -192,28 +190,28 @@ def main(args: Args) -> None:
                 continue
             
             # Preprocess observations
-            try:
-                processed_obs = obs_processor.preprocess_observations(obs)
-                frames.append(processed_obs["image"])
-                
-                # Capture full resolution frames for video recording if enabled
-                if args.save_full_res_video:
-                    full_res_frame = env_manager.env.sim.render(
-                        width=args.full_res_width, 
-                        height=args.full_res_height, 
-                        camera_name="agentview"
-                    )
-                    full_res_wrist_frame = env_manager.env.sim.render(
-                        width=args.full_res_width, 
-                        height=args.full_res_height, 
-                        camera_name="robot0_eye_in_hand"
-                    )
-                    hd_frames.append(full_res_frame)
-                    hd_wrist_frames.append(full_res_wrist_frame)
+            # try:
+            processed_obs = obs_processor.preprocess_observations(obs)
+            frames.append(processed_obs["image"])
+            
+            # Capture full resolution frames for video recording if enabled
+            if args.save_full_res_video:
+                full_res_frame = env_manager.env.sim.render(
+                    width=args.full_res_width, 
+                    height=args.full_res_height, 
+                    camera_name="agentview"
+                )
+                full_res_wrist_frame = env_manager.env.sim.render(
+                    width=args.full_res_width, 
+                    height=args.full_res_height, 
+                    camera_name="robot0_eye_in_hand"
+                )
+                hd_frames.append(full_res_frame)
+                hd_wrist_frames.append(full_res_wrist_frame)
                     
-            except Exception as e:
-                logging.error(f"Error during preprocessing at step {t}: {e}")
-                break
+            # except Exception as e:
+            #     logging.error(f"Error during preprocessing at step {t}: {e}")
+            #     break
             
             # Get action from OpenPI server if needed
             if not action_plan:
