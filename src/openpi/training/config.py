@@ -1072,7 +1072,7 @@ _CONFIGS = [
             action_expert_variant="gemma_300m_lora",
         ),
         data=LeRobotLiberoDataConfig(
-            repo_id="tduggan93/hanoi_random_block_selection",
+            repo_id="tduggan93/hanoi_300_lerobot",
             base_config=DataConfig(
                 prompt_from_task=True,
             ),
@@ -1101,7 +1101,7 @@ _CONFIGS = [
             action_expert_variant="gemma_300m_lora",
         ),
         data=LeRobotLiberoDataConfig(
-            repo_id="tduggan93/hanoi_random_block_selection",
+            repo_id="tduggan93/hanoi_libero_300",
             base_config=DataConfig(
                 prompt_from_task=True,
             ),
