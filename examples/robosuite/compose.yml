@@ -1,0 +1,61 @@
+services:
+  runtime:
+    image: libero
+    depends_on:
+      - openpi_server
+    build:
+      context: ../..
+      dockerfile: examples/libero/Dockerfile
+    init: true
+    tty: true
+    network_mode: host
+    privileged: true
+    volumes:
+      - $PWD:/app
+      - ../../data:/data                                       # Save videos outside of 
+      - ../../../robosuite:/robosuite_source                   # Robosuite simulation
+      - ../../../robosuite-task-zoo:/robosuite_task_zoo_source # Robosuite dependency
+      - ../../../dataset_making:/app/dataset_making            # Recording functionality
+      - ../../../planning:/app/planning                        # Planning functionality
+      - ../../../tarski:/tarski                                # Planning functionality
+      - ../../../Metric-FF-v2.1:/app/Metric-FF-v2.1            # PDDL solver
+      - /tmp/.X11-unix:/tmp/.X11-unix:ro 
+    environment:
+      - PYTHONPATH=/robosuite_source:${PYTHONPATH}
+      - PYTHONPATH=/robosuite_source:/app:/app/packages/openpi-client/src:/app/third_party/libero
+      - WANDB_API_KEY=${WANDB_API_KEY}
+      - DISPLAY=$DISPLAY
+      - NVIDIA_DRIVER_CAPABILITIES=all
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu, graphics, compute, utility]
+
+  openpi_server:
+    image: openpi_server
+    build:
+      context: ../..
+      dockerfile: scripts/docker/serve_policy.Dockerfile
+    init: true
+    tty: true
+    network_mode: host
+    runtime: nvidia
+    privileged: true
+    volumes:
+      - $PWD:/app
+      - ${OPENPI_DATA_HOME:-~/.cache/openpi}:/openpi_assets
+    environment:  # Set the server args based on the model you want to evaluate
+      - SERVER_ARGS=policy:checkpoint --policy.config pi0_hanoi_end_to_end --policy.dir /app/checkpoints/pi0-hanoi-end-to-end
+      # - SERVER_ARGS=policy:checkpoint --policy.config pi0_hanoi_planner_guided --policy.dir /app/checkpoints/pi0-hanoi-planner-guided
+      - OPENPI_DATA_HOME=/openpi_assets
+      - IS_DOCKER=true
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu, graphics, compute, utility]
