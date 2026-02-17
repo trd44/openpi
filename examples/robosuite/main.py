@@ -79,23 +79,23 @@ class Args:
     skip_steps: int = 50                 # Number of initial steps to skip (wait for objects to settle)
 
     # --- Multi-configuration support ---
-    random_block_placement: bool = False # Place blocks on pegs randomly according to Towers of Hanoi rules
-    random_block_selection: bool = False  # Randomly select 3 out of 4 blocks
+    random_block_placement: bool = False   # Place blocks on pegs randomly according to Towers of Hanoi rules
+    random_block_selection: bool = False   # Randomly select 3 out of 4 blocks
     cube_init_pos_noise_std: float = 0.01  # Std dev for XY jitter of initial tower position
 
     # --- Rendering & Video ---
-    render_mode: str = "headless"    # Rendering mode: 'headless' (save video) or 'human' (live view via X11)
+    render_mode: str = "headless"                 # Rendering mode: 'headless' (save video) or 'human' (live view)
     video_out_path: str = "data/robosuite_videos" # Directory to save videos
     camera_names: List[str] = dataclasses.field(
         default_factory=lambda: ["agentview", "robot0_eye_in_hand"]
         ) # Cameras for observation/video
-    camera_height: int = 256 # Rendered camera height (before potential resize)
-    camera_width: int = 256 # Rendered camera width (before potential resize)
+    camera_height: int = 256  # Rendered camera height (before potential resize)
+    camera_width: int = 256   # Rendered camera width (before potential resize)
     
     # --- Full Resolution Video Recording ---
-    save_full_res_video: bool = True # Save full resolution videos alongside model observations
-    full_res_height: int = 480 # Full resolution video height
-    full_res_width: int = 640  # Full resolution video width
+    save_full_res_video: bool = True  # Save full resolution videos alongside model observations
+    full_res_height: int = 480        # Full resolution video height
+    full_res_width: int = 640         # Full resolution video width
     required_cameras: List[str] = dataclasses.field(
         default_factory=lambda: ["agentview", "robot0_eye_in_hand"]
         ) # Required cameras for OpenPI preprocessing
@@ -105,8 +105,8 @@ class Args:
     episodes: int = 50      #: How many episodes to run back-to-back
 
     # --- Logging ---
-    wandb_project: str = "ICRA-4-Block-Hanoi-End-to-End-Energy-Measure"   #: W&B project name
-    log_every_n_seconds: float = 0.5                              #: Logging interval for W&B settings
+    wandb_project: str = "Your wandb project name"  #: W&B project name
+    log_every_n_seconds: float = 0.5                #: Logging interval for W&B settings (Broken)
     
     def generate_video_filename(self, episode: int) -> str:
         """Generate video filename based on current arguments and episode number."""
@@ -208,26 +208,6 @@ def get_gpu_memory_usage():
         pass
     return 0.0
 
-def get_cpu_power_usage():
-    """Get CPU power usage estimation based on frequency and utilization."""
-    try:
-        # Get CPU frequency and utilization
-        cpu_freq = psutil.cpu_freq()
-        cpu_percent = psutil.cpu_percent(interval=0.1)
-        
-        if cpu_freq and cpu_freq.current > 0:
-            # Rough estimation: higher frequency and utilization = higher power
-            # This is a simplified model - actual power depends on many factors
-            base_power = 15.0  # Base power in watts
-            freq_factor = (cpu_freq.current / cpu_freq.max) if cpu_freq.max > 0 else 1.0
-            util_factor = cpu_percent / 100.0
-            
-            estimated_power = base_power * freq_factor * (0.5 + 0.5 * util_factor)
-            return estimated_power
-    except Exception:
-        pass
-    return 0.0
-
 def get_system_metrics():
     """Get comprehensive system metrics with timestamps."""
     try:
@@ -256,16 +236,12 @@ def get_system_metrics():
         gpu_util = get_gpu_utilization()
         gpu_memory = get_gpu_memory_usage()
         
-        # CPU power estimation
-        cpu_power = get_cpu_power_usage()
-        
         return {
             'timestamp': current_time,
             'timestamp_iso': time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(current_time)),
             'cpu_percent': cpu_percent,
             'cpu_freq_mhz': cpu_freq.current if cpu_freq else 0,
             'cpu_count': cpu_count,
-            'cpu_power_watts': cpu_power,
             'memory_percent': memory_percent,
             'memory_used_gb': memory_used_gb,
             'memory_total_gb': memory_total_gb,
@@ -332,6 +308,7 @@ def calculate_energy_consumption(power_data_points):
         'duration_hours': total_duration / 3600
     }
 
+# --------------------------------------------------------------------------------------
 # Environment setup and management
 # --------------------------------------------------------------------------------------
 class MultiConfigHanoiEnvironment:
