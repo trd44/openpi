@@ -740,7 +740,7 @@ _CONFIGS = [
         name="pi0_hanoi_end_to_end",
         model=pi0.Pi0Config(paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"),
         data=LeRobotLiberoDataConfig(
-            repo_id="tduggan93/hanoi_300_lerobot",
+            repo_id="tduggan93/hanoi-300-lerobot",
             base_config=DataConfig(
                 prompt_from_task=True,
             ),
@@ -757,7 +757,7 @@ _CONFIGS = [
         name="pi0_hanoi_planner_guided",
         model=pi0.Pi0Config(paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"),
         data=LeRobotLiberoDataConfig(
-            repo_id="tduggan93/hanoi_300_lerobot",
+            repo_id="tduggan93/hanoi-300-lerobot",
             base_config=DataConfig(
                 prompt_from_task=True,
             ),
