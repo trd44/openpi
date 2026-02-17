@@ -1,8 +1,18 @@
+"""
+Task-specific detector predicates for Panda Hanoi environments in robosuite.
+"""
+# -----------------------------------------------------------------------------
+# File: openpi/examples/robosuite/hanoi_detectors.py
+# Purpose: Predicate checks used by planning state extraction and task scoring.
+# -----------------------------------------------------------------------------
 import numpy as np
 from robosuite.utils.detector import HanoiDetector as _BaseHanoiDetector
 
 class PandaHanoiDetector(_BaseHanoiDetector):
+    """Panda-specific detector implementation for Hanoi predicates."""
+
     def __init__(self, env):
+        """Initialize geometry mappings and peg reference positions."""
         super().__init__(env)
         robot_model_name = getattr(env.robots[0].robot_model, 'model_type', '')
         self.is_panda = 'Panda' in robot_model_name
@@ -37,15 +47,17 @@ class PandaHanoiDetector(_BaseHanoiDetector):
             print("Warning: env.pegs_xy_center not found in PandaHanoiDetector init.")
 
     def open(self, gripper_pddl_name, return_distance=False):
+        """Check whether the gripper is open, or return opening distance."""
         j1 = float(self.env.sim.data.get_joint_qpos('gripper0_finger_joint1'))
         j2 = float(self.env.sim.data.get_joint_qpos('gripper0_finger_joint2'))
         qpos_diff = abs(j1 - j2)
         
         if return_distance:
             return qpos_diff
-        return qpos_diff > 0.075 # Threshold for "open"
+        return qpos_diff > 0.075  # Threshold for "open"
 
     def grasped(self, obj_pddl_name, return_distance=False):
+        """Check whether either finger pad is in contact with the target object."""
         target_mjcf_body_name = self.object_id.get(obj_pddl_name)
         if not target_mjcf_body_name: return False
         
@@ -57,7 +69,6 @@ class PandaHanoiDetector(_BaseHanoiDetector):
         obj_mjcf_geom_names = [model.geom_id2name(g_id) for g_id in geom_ids if model.geom_id2name(g_id) is not None]
 
         if self.left_tip is None or self.right_tip is None:
-            # print("Warning: Gripper fingerpad geoms not found for grasped check.")
             return False
 
         left_contact  = self.env.check_contact(self.left_tip,  obj_mjcf_geom_names)
@@ -69,13 +80,14 @@ class PandaHanoiDetector(_BaseHanoiDetector):
         return is_grasped
 
     def over(self, gripper_pddl_name, obj_pddl_name, return_distance=False):
+        """Check XY alignment between gripper and a cube or peg target."""
         gripper_mjcf_body_name = self.object_id.get(gripper_pddl_name)
         if not gripper_mjcf_body_name:
-            # print(f"Detector.over: Gripper PDDL name '{gripper_pddl_name}' not in object_id map.")
             return False if not return_distance else np.inf
         
         gripper_body_id = self.env.sim.model.body_name2id(gripper_mjcf_body_name)
-        if gripper_body_id == -1: return False if not return_distance else np.inf # Should not happen
+        if gripper_body_id == -1:
+            return False if not return_distance else np.inf
         gripper_pos = self.env.sim.data.body_xpos[gripper_body_id]
 
         # Get target object/peg position
@@ -91,7 +103,6 @@ class PandaHanoiDetector(_BaseHanoiDetector):
             target_body_id = self.env.sim.model.body_name2id(target_mjcf_body_name)
             if target_body_id == -1: return False if not return_distance else np.inf
             target_pos_full = self.env.sim.data.body_xpos[target_body_id]
-            # print(f"Using SIMULATED target pos for {obj_pddl_name}: {target_pos_full[:2]}")
 
         dist_xy = np.linalg.norm(gripper_pos[:2] - target_pos_full[:2])
 
@@ -101,7 +112,6 @@ class PandaHanoiDetector(_BaseHanoiDetector):
         OVER_THRESHOLD = 0.0005 
         is_condition_met = dist_xy < OVER_THRESHOLD
         
-        # print(f"  PandaHanoiDetector.over('{gripper_pddl_name}', '{obj_pddl_name}'): dist_xy={dist_xy:.4f}, thresh={OVER_THRESHOLD}, met={is_condition_met}")
         return is_condition_met
 
     def on(self, obj1, obj2):
@@ -137,48 +147,41 @@ class PandaHanoiDetector(_BaseHanoiDetector):
             return False
 
     def get_groundings(self, as_dict=False, binary_to_float=False, return_distance=False):
-        # Start with groundings from the base class, if it provides any useful ones
-        # Or initialize an empty dict if _BaseHanoiDetector.get_groundings is not suitable/available
+        """Build a grounding vector/dict for grasped, over, open, and on predicates."""
+        # Start from base detector groundings when available.
         try:
             groundings = super().get_groundings(as_dict=True, binary_to_float=False, return_distance=False)
-        except AttributeError: # If base class doesn't have it or it's not suitable
+        except AttributeError:
             groundings = {}
 
-        # PDDL entities
-        pddl_gripper = "gripper" # The PDDL name for your gripper
-        all_manipulable_objects = self.objects # Cubes
-        all_placement_targets = self.pegs_pddl_names + self.objects # Pegs + Cubes (for stacking)
+        pddl_gripper = "gripper"
+        all_manipulable_objects = self.objects
+        all_placement_targets = self.pegs_pddl_names + self.objects
 
-        # Grasped predicates
         for obj_name in all_manipulable_objects:
             val = self.grasped(obj_name, return_distance=return_distance)
             if not return_distance and binary_to_float: val = float(val)
             groundings[f'grasped({obj_name})'] = val
-            # For compatibility with some planners, also maybe:
-            # groundings[f'holding({pddl_gripper},{obj_name})'] = val
 
-
-        # Over predicates
-        for target_name in all_placement_targets: # Cubes and Pegs
+        for target_name in all_placement_targets:
             val = self.over(pddl_gripper, target_name, return_distance=return_distance)
             if not return_distance and binary_to_float: val = float(val)
             groundings[f'over({pddl_gripper},{target_name})'] = val
         
-        # Open gripper predicate
         val = self.open(pddl_gripper, return_distance=return_distance)
         if not return_distance and binary_to_float: val = float(val)
-        groundings[f'open_gripper({pddl_gripper})'] = val # Or just open() or handempty()
+        groundings[f'open_gripper({pddl_gripper})'] = val
 
-        # On predicates - check if objects are placed on pegs or stacked on other objects
-        all_placement_targets = self.pegs_pddl_names + self.objects  # Pegs + Cubes (for stacking)
+        # Evaluate stacking predicates for cube-on-peg and cube-on-cube.
+        all_placement_targets = self.pegs_pddl_names + self.objects
         for obj_name in all_manipulable_objects:
             for target_name in all_placement_targets:
-                if obj_name != target_name:  # Don't check if object is on itself
+                if obj_name != target_name:
                     val = self.on(obj_name, target_name)
                     if not return_distance and binary_to_float: val = float(val)
                     groundings[f'on({obj_name},{target_name})'] = val
 
-        # Ensure all keys are strings if converting to array later
+        # Keep keys stable if callers convert dict output to arrays.
         groundings = {str(k): v for k, v in groundings.items()}
         
         return dict(sorted(groundings.items())) if as_dict else np.array([v for k, v in sorted(groundings.items())])

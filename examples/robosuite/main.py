@@ -1,7 +1,11 @@
 """
-Multi-configuration Hanoi script that can handle all block configurations similar to the dataset making module.
-This script combines the planning capabilities from dataset_making with the task sequence management from main_hanoi.py.
+Run multi-configuration Towers of Hanoi in robosuite with OpenPI control.
+Includes task sequencing, detector integration, and optional PDDL planning.
 """
+# -----------------------------------------------------------------------------
+# File: openpi/examples/robosuite/main.py
+# Purpose: Robosuite Hanoi runner with OpenPI policy inference and task tracking.
+# -----------------------------------------------------------------------------
 import collections
 import dataclasses
 import logging
@@ -21,14 +25,13 @@ import tyro
 import robosuite as suite
 from robosuite import load_controller_config
 
-# Import from dataset_making module
+# Imports from dataset_making and planning modules.
 import sys
 sys.path.append('/app')
 from dataset_making.record_demos import RecordDemos
 from dataset_making.panda_hanoi_detector import PandaHanoiDetector
 from planning.planner import add_predicates_to_pddl, call_planner
 
-# Assuming openpi_client is installed in the environment
 from openpi_client import image_tools
 from openpi_client import websocket_client_policy as _websocket_client_policy
 
@@ -106,7 +109,7 @@ class Args:
 
     # --- Logging ---
     wandb_project: str = "Your wandb project name"  #: W&B project name
-    log_every_n_seconds: float = 0.5                #: Logging interval for W&B settings (Broken)
+    log_every_n_seconds: float = 0.5                #: W&B system metric sampling interval (seconds)
     
     def generate_video_filename(self, episode: int) -> str:
         """Generate video filename based on current arguments and episode number."""
@@ -131,7 +134,7 @@ def _quat2axisangle(quat: np.ndarray) -> np.ndarray:
     https://github.com/ARISE-Initiative/robosuite/blob/eafb81f54ffc104f905ee48a1
     6bb15f059176ad3/robosuite/utils/transform_utils.py#L490C1-L512C55
     """
-    # clip quaternion
+    # Clamp scalar component to valid range.
     if quat[3] > 1.0:
         quat[3] = 1.0
     elif quat[3] < -1.0:
@@ -139,7 +142,7 @@ def _quat2axisangle(quat: np.ndarray) -> np.ndarray:
 
     den = np.sqrt(1.0 - quat[3] * quat[3])
     if math.isclose(den, 0.0):
-        # This is (close to) a zero degree rotation, immediately return
+        # Near-zero rotation; axis-angle is the zero vector.
         return np.zeros(3)
 
     return (quat[:3] * 2.0 * math.acos(quat[3])) / den
@@ -315,6 +318,7 @@ class MultiConfigHanoiEnvironment:
     """Manages the Robosuite Hanoi environment setup with multi-configuration support."""
     
     def __init__(self, args: Args):
+        """Store runtime args and initialize managed environment state."""
         self.args = args
         self.env = None
         self.detector_simple = None
@@ -363,25 +367,19 @@ class MultiConfigHanoiEnvironment:
         
         logging.info(f"Environment created with random_block_placement={self.args.random_block_placement}, random_block_selection={self.args.random_block_selection}")
         
-        # Monkey patch to fix robosuite bug with random_block_selection and random_block_placement
-        # The issue is that both methods try to access cubes that don't exist when these flags are True.
-        # We need to patch both methods to respect current_block_config.
+        # Patch robosuite placement helpers to respect current_block_config.
         
-        # Check if place_block_tower method exists before trying to patch it
         if hasattr(self.env, 'place_block_tower'):
-            # Patch place_block_tower for random_block_selection
             original_place_block_tower = self.env.place_block_tower
             
             def patched_place_block_tower():
-                """Patched version that respects current_block_config when random_block_selection=True"""
+                """Ensure tower placement only references cubes in current_block_config."""
                 try:
-                    # Check if we have random_block_selection and current_block_config is set
                     if hasattr(self.env, 'random_block_selection') and self.env.random_block_selection:
                         if hasattr(self.env, 'current_block_config') and self.env.current_block_config:
                             available_cubes = set(self.env.current_block_config)
                             logging.info(f"Available cubes in current_block_config: {available_cubes}")
                             
-                            # Update placement initializers to only use available cubes
                             if hasattr(self.env, 'large_block_placement_initializer'):
                                 large_cube = self.env.current_block_config[2] if len(self.env.current_block_config) > 2 else None
                                 if large_cube and hasattr(self.env, large_cube):
@@ -400,40 +398,33 @@ class MultiConfigHanoiEnvironment:
                                     self.env.small_block_placement_initializer.mujoco_objects = [getattr(self.env, small_cube)]
                                     logging.info(f"Updated small_block_placement_initializer to use {small_cube}")
                     
-                    # Call original method
                     return original_place_block_tower()
                     
                 except Exception as e:
                     logging.error(f"Error in patched place_block_tower: {e}")
                     import traceback
                     logging.error(f"Full traceback: {traceback.format_exc()}")
-                    # Fallback to original method
                     return original_place_block_tower()
             
-            # Apply the patch
             self.env.place_block_tower = patched_place_block_tower
             logging.info("Applied place_block_tower patch")
         else:
             logging.warning("place_block_tower method not found on environment. Skipping patch.")
         
-        # Check if place_blocks_randomly method exists before trying to patch it
         if hasattr(self.env, 'place_blocks_randomly'):
-            # Patch place_blocks_randomly for random_block_placement
             original_place_blocks_randomly = self.env.place_blocks_randomly
             
             def patched_place_blocks_randomly():
-                """Completely rewritten version that respects current_block_config when random_block_placement=True"""
+                """Ensure random placement uses only cubes in current_block_config."""
                 try:
-                    # Check if we have random_block_placement and current_block_config is set
                     if hasattr(self.env, 'random_block_placement') and self.env.random_block_placement:
                         if hasattr(self.env, 'current_block_config') and self.env.current_block_config:
                             available_cubes = set(self.env.current_block_config)
                             logging.info(f"Available cubes in current_block_config for placement: {available_cubes}")
                         
-                        # Set the large, medium, small variables to use available cubes
                         available_cubes_list = list(available_cubes)
                         
-                        # Sort by cube number to maintain consistent ordering
+                        # Keep naming consistent with cube indices.
                         available_cubes_list.sort(key=lambda x: int(x.replace('cube', '')))
                         
                         logging.info(f"Available cubes (sorted): {available_cubes_list}")
@@ -454,8 +445,7 @@ class MultiConfigHanoiEnvironment:
                         
                         logging.info(f"Set large={self.env.large}, medium={self.env.medium}, small={self.env.small}")
                         
-                        # CRITICAL FIX: Update the placement initializers to use the correct mujoco objects
-                        # Map cube names to mujoco objects
+                        # Update placement initializers with mapped MuJoCo objects.
                         cube_name_to_obj = {
                             'cube1': self.env.cube1,
                             'cube2': self.env.cube2, 
@@ -463,7 +453,6 @@ class MultiConfigHanoiEnvironment:
                             'cube4': self.env.cube4
                         }
                         
-                        # Update placement initializers with correct mujoco objects
                         if self.env.large in cube_name_to_obj:
                             self.env.large_block_placement_initializer.mujoco_objects = [cube_name_to_obj[self.env.large]]
                             logging.info(f"Updated large_block_placement_initializer to use {self.env.large}")
@@ -476,27 +465,22 @@ class MultiConfigHanoiEnvironment:
                             self.env.small_block_placement_initializer.mujoco_objects = [cube_name_to_obj[self.env.small]]
                             logging.info(f"Updated small_block_placement_initializer to use {self.env.small}")
                         
-                        # Now call the original method with the corrected variables
                         return original_place_blocks_randomly()
                 
-                    # Call original method
                     return original_place_blocks_randomly()
                     
                 except Exception as e:
                     logging.error(f"Error in patched place_blocks_randomly: {e}")
                     import traceback
                     logging.error(f"Full traceback: {traceback.format_exc()}")
-                    # Fallback to original method
                     return original_place_blocks_randomly()
             
-            # Apply the patch
             self.env.place_blocks_randomly = patched_place_blocks_randomly
             logging.info("Applied place_blocks_randomly patch")
         else:
             logging.warning("place_blocks_randomly method not found on environment. Skipping patch.")
         
-        # Add GymWrapper for compatibility with RecordDemos (after patching)
-        # Add GymWrapper for compatibility with RecordDemos (like in working examples)
+        # Wrap for RecordDemos compatibility.
         from robosuite.wrappers import GymWrapper
         self.env = GymWrapper(self.env, proprio_obs=True)
         
@@ -513,16 +497,14 @@ class MultiConfigHanoiEnvironment:
         self.detector_simple = SimpleHanoiDetector(self.env)
         self.detector_ground = PandaHanoiDetector(self.env)
         
-        # Setup PDDL path
-        # Use 'hanoi' for PDDL path since Hanoi4x3 uses the same PDDL as Hanoi
+        # Hanoi4x3 shares the same PDDL folder as Hanoi.
         pddl_env_name = 'hanoi' if self.args.env_name.lower() == 'hanoi4x3' else self.args.env_name.lower()
         self.pddl_path = os.path.join('/app/planning', 'PDDL', pddl_env_name)
-        # uncoment the line below if running without docker
+        # Uncomment for local non-Docker runs.
         # self.pddl_path = os.path.join('/home/hrilab/Documents/.vlas/cycliclxm-slim/CyclicLxM/planning/', 'PDDL', self.args.env_name.lower())
         if not self.pddl_path.endswith(os.sep):
             self.pddl_path += os.sep
         
-        # Create recorder for planning
         self.recorder = RecordDemos(
             self.env,
             vision_based=True,  # Use vision-based observations
@@ -695,7 +677,7 @@ class MultiConfigHanoiEnvironment:
             else:
                 area = areas.get(op[2], op[2])
                 return f"Place the {block} in the {area}."
-        return op_str  # fallback
+        return op_str  # Preserve unknown operator text.
     
     def _create_completion_check(self, op_str: str, step_idx: int) -> Callable:
         """Create a completion check function for a given operation."""
@@ -705,6 +687,7 @@ class MultiConfigHanoiEnvironment:
             if op[0] == "pick":
                 cube = op[1]
                 def check_pick():
+                    """Return True when either detector confirms the cube is grasped."""
                     try:
                         # Use ground detector as primary check, with simple detector as backup
                         ground_grasped = bool(self.detector_ground.get_groundings(as_dict=True, binary_to_float=False, return_distance=False).get(f"grasped({cube})", False))
@@ -725,6 +708,7 @@ class MultiConfigHanoiEnvironment:
                 cube = op[1]
                 target = op[2]
                 def check_place():
+                    """Return True when cube is on target and no longer grasped."""
                     try:
                         # Check if cube is placed on target using ground detector
                         ground_placed = bool(self.detector_ground.get_groundings(as_dict=True, binary_to_float=False, return_distance=False).get(f"on({cube},{target})", False))
@@ -754,6 +738,7 @@ class MultiConfigHanoiEnvironment:
         """Get default task sequence when no plan is available."""
         try:
             def g():
+                """Fetch detector groundings safely for fallback task predicates."""
                 try:
                     return self.detector_ground.get_groundings(as_dict=True, binary_to_float=False, return_distance=False)
                 except Exception as e:
@@ -773,13 +758,13 @@ class MultiConfigHanoiEnvironment:
             logging.info(f"Available cubes: {available_cubes}")
             
             if len(available_cubes) < 1:
-                # Fallback to a very simple task if no cubes available
+                # Minimal fallback when detector reports no cubes.
                 return [
                     {"prompt": "Move the robot arm.", "done": lambda: True},
                 ]
             
             if len(available_cubes) < 2:
-                # Fallback to a simple task if not enough cubes
+                # Reduced fallback sequence when fewer than two cubes are available.
                 return [
                     {"prompt": "Pick up a block.", "done": lambda: any(g().get(f"grasped({cube})", False) for cube in available_cubes)},
                     {"prompt": "Place the block in the right area.", "done": lambda: any(g().get(f"on({cube},peg3)", False) for cube in available_cubes)},
@@ -808,7 +793,7 @@ class MultiConfigHanoiEnvironment:
             logging.error(f"Error creating default task sequence: {e}")
             import traceback
             logging.error(f"Full traceback: {traceback.format_exc()}")
-            # Return a very simple fallback
+            # Last-resort fallback sequence.
             return [
                 {"prompt": "Move the robot arm.", "done": lambda: True},
             ]
@@ -828,6 +813,7 @@ class TaskManager:
     
     def __init__(self, tasks: List[Dict[str, Any]], use_sequential_tasks: bool = False, 
                  time_based_progression: bool = False, task_timeout: int = 200):
+        """Initialize task progression mode, counters, and current prompt state."""
         self.tasks = tasks
         self.use_sequential_tasks = use_sequential_tasks
         self.time_based_progression = time_based_progression
@@ -1021,6 +1007,7 @@ class ObservationPreprocessor:
     """Handles preprocessing of environment observations for OpenPI."""
     
     def __init__(self, resize_size: int, env_manager=None):
+        """Set resize target and optional environment manager fallback handle."""
         self.resize_size = resize_size
         self.env_manager = env_manager
         
@@ -1035,7 +1022,7 @@ class ObservationPreprocessor:
             "robot0_gripper_qpos"
         ]
         
-        # Ensure obs is a dict (like in working examples)
+        # Retrieve fresh observations if the wrapper returns a non-dict object.
         if not isinstance(obs, dict):
             obs = self.env_manager.env.env._get_observations()
         
