@@ -5,7 +5,7 @@ services:
       - openpi_server
     build:
       context: ../..
-      dockerfile: examples/libero/Dockerfile
+      dockerfile: examples/robosuite/Dockerfile
     init: true
     tty: true
     network_mode: host
@@ -48,8 +48,8 @@ services:
       - $PWD:/app
       - ${OPENPI_DATA_HOME:-~/.cache/openpi}:/openpi_assets
     environment:  # Set the server args based on the model you want to evaluate
-      - SERVER_ARGS=policy:checkpoint --policy.config pi0_hanoi_end_to_end --policy.dir /app/checkpoints/pi0-hanoi-end-to-end
-      # - SERVER_ARGS=policy:checkpoint --policy.config pi0_hanoi_planner_guided --policy.dir /app/checkpoints/pi0-hanoi-planner-guided
+      # - SERVER_ARGS=policy:checkpoint --policy.config pi0_hanoi_end_to_end --policy.dir /app/checkpoints/pi0-hanoi-end-to-end
+      - SERVER_ARGS=policy:checkpoint --policy.config pi0_hanoi_planner_guided --policy.dir /app/checkpoints/pi0-hanoi-planner-guided
       - OPENPI_DATA_HOME=/openpi_assets
       - IS_DOCKER=true
     deploy:

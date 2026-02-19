@@ -69,13 +69,13 @@ class Args:
     # --- Policy Interaction ---
     resize_size: int = 224               # Target size for image resizing (must match model training)
     replan_steps: int = 50               # Number of steps per action chunk from policy server
-    use_sequential_tasks: bool =False    # If True, use sequential task prompts; if False, use single prompt
+    use_sequential_tasks: bool =True    # If True, use sequential task prompts; if False, use single prompt
     time_based_progression: bool = False # If True, advance to next task after task_timeout steps regardless of completion
     task_timeout: int = 750              # Number of steps to wait before timing out a task
 
     # --- Robosuite Environment ---
-    env_name: str = "Hanoi4x3" 
-    env: str = "Hanoi4x3"                # Environment name for RecordDemos compatibility
+    env_name: str = "Hanoi" 
+    env: str = "Hanoi"                # Environment name for RecordDemos compatibility
     robots: str = "Panda"                # Robot model to use
     controller: str = "OSC_POSE"         # Robosuite controller name
     horizon: int = 7050                  # Max steps per episode
@@ -83,7 +83,7 @@ class Args:
 
     # --- Multi-configuration support ---
     random_block_placement: bool = False   # Place blocks on pegs randomly according to Towers of Hanoi rules
-    random_block_selection: bool = False   # Randomly select 3 out of 4 blocks
+    random_block_selection: bool = True    # Randomly select 3 out of 4 blocks
     cube_init_pos_noise_std: float = 0.01  # Std dev for XY jitter of initial tower position
 
     # --- Rendering & Video ---
@@ -105,7 +105,7 @@ class Args:
 
     # --- Misc ---
     seed: int = 3           #: Random seed
-    episodes: int = 50      #: How many episodes to run back-to-back
+    episodes: int = 10      #: How many episodes to run back-to-back
 
     # --- Logging ---
     wandb_project: str = "Your wandb project name"  #: W&B project name
