@@ -16,6 +16,7 @@ import tyro
 import openpi.models.model as _model
 import openpi.models.pi0_config as pi0_config
 import openpi.models.pi0_fast as pi0_fast
+import openpi.models.pi0_small_config as pi0_small_config
 import openpi.models.tokenizer as _tokenizer
 import openpi.policies.aloha_policy as aloha_policy
 import openpi.policies.droid_policy as droid_policy
@@ -136,6 +137,17 @@ class ModelTransformFactory(GroupFactory):
                         _transforms.PadStatesAndActions(model_config.action_dim),
                     ],
                 )
+            case _model.ModelType.PI0_SMALL:
+                return _transforms.Group(
+                    inputs=[
+                        _transforms.InjectDefaultPrompt(self.default_prompt),
+                        _transforms.ResizeImages(224, 224),
+                        _transforms.TokenizePrompt(
+                            _tokenizer.PaligemmaTokenizer(model_config.max_token_len),
+                        ),
+                        _transforms.PadStatesAndActions(model_config.action_dim),
+                    ],
+                )
             case _model.ModelType.PI0_FAST:
                 tokenizer_cls = (
                     _tokenizer.FASTTokenizer
@@ -184,7 +196,7 @@ class DataConfigFactory(abc.ABC):
             repo_id=repo_id,
             asset_id=asset_id,
             norm_stats=self._load_norm_stats(epath.Path(self.assets.assets_dir or assets_dirs), asset_id),
-            use_quantile_norm=model_config.model_type != ModelType.PI0,
+            use_quantile_norm=model_config.model_type not in (ModelType.PI0, ModelType.PI0_SMALL),
         )
 
     def _load_norm_stats(self, assets_dir: epath.Path, asset_id: str | None) -> dict[str, _transforms.NormStats] | None:
@@ -759,6 +771,79 @@ _CONFIGS = [
         ema_decay=0.999,
         weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi05_base/params"),
         pytorch_weight_path="/path/to/your/pytorch_weight_path",
+        num_train_steps=30_000,
+    ),
+    #
+    # Fine-tuning Pi0-Small (no-VLM) Libero configs.
+    #
+    # Pi0-Small removes the 2.7B PaliGemma VLM backbone and uses a single 300M Gemma
+    # transformer with flow matching. Three initialization options are provided.
+    #
+    # Memory guide:
+    #   - pi0_small_libero: full fine-tune, batch_size=8 — fits on 1x 24GB GPU (RTX 4090)
+    #   - pi0_small_libero_low_mem: freeze SigLIP, batch_size=16 — fits on 1x 24GB GPU
+    #   - For multi-GPU: increase batch_size proportionally via CLI override
+    TrainConfig(
+        name="pi0_small_libero",
+        model=pi0_small_config.Pi0SmallConfig(),
+        data=LeRobotLiberoDataConfig(
+            repo_id="physical-intelligence/libero",
+            base_config=DataConfig(prompt_from_task=True),
+            extra_delta_transform=True,
+        ),
+        # Initialize from the pi0_base action expert (300M) weights.
+        weight_loader=weight_loaders.Pi0SmallFromPi0BaseWeightLoader(
+            "gs://openpi-assets/checkpoints/pi0_base/params"
+        ),
+        batch_size=8,
+        # EMA disabled to save ~4GB on 24GB GPUs; re-enable (e.g., ema_decay=0.99) if you
+        # have more VRAM and want smoother final weights for eval.
+        ema_decay=None,
+        num_train_steps=30_000,
+    ),
+    TrainConfig(
+        # Freeze SigLIP encoder to save ~3.2GB optimizer memory, allowing larger batch size.
+        name="pi0_small_libero_low_mem",
+        model=pi0_small_config.Pi0SmallConfig(freeze_vision=True),
+        data=LeRobotLiberoDataConfig(
+            repo_id="physical-intelligence/libero",
+            base_config=DataConfig(prompt_from_task=True),
+            extra_delta_transform=True,
+        ),
+        weight_loader=weight_loaders.Pi0SmallFromPi0BaseWeightLoader(
+            "gs://openpi-assets/checkpoints/pi0_base/params"
+        ),
+        freeze_filter=pi0_small_config.Pi0SmallConfig(freeze_vision=True).get_freeze_filter(),
+        batch_size=16,
+        ema_decay=None,
+        num_train_steps=30_000,
+    ),
+    TrainConfig(
+        name="pi0_small_libero_pretrained_init",
+        model=pi0_small_config.Pi0SmallConfig(),
+        data=LeRobotLiberoDataConfig(
+            repo_id="physical-intelligence/libero",
+            base_config=DataConfig(prompt_from_task=True),
+            extra_delta_transform=True,
+        ),
+        # Initialize from the official PaliGemma checkpoint (SigLIP encoder only).
+        weight_loader=weight_loaders.Pi0SmallFromPaliGemmaWeightLoader(),
+        batch_size=8,
+        ema_decay=None,
+        num_train_steps=30_000,
+    ),
+    TrainConfig(
+        name="pi0_small_libero_scratch",
+        model=pi0_small_config.Pi0SmallConfig(),
+        data=LeRobotLiberoDataConfig(
+            repo_id="physical-intelligence/libero",
+            base_config=DataConfig(prompt_from_task=True),
+            extra_delta_transform=True,
+        ),
+        # Train from scratch (SigLIP encoder still pretrained).
+        weight_loader=weight_loaders.Pi0SmallScratchWeightLoader(),
+        batch_size=8,
+        ema_decay=None,
         num_train_steps=30_000,
     ),
     #
