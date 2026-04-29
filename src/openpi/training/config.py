@@ -809,7 +809,7 @@ _CONFIGS = [
         name="pi05_forklift",
         model=pi0_config.Pi0Config(pi05=True, action_horizon=10, discrete_state_input=False),
         data=LeRobotForkliftDataConfig(
-            repo_id="local/forklift_stage3",
+            repo_id="tduggan93/forklift",
             base_config=DataConfig(prompt_from_task=True),
         ),
         batch_size=128,
@@ -822,7 +822,7 @@ _CONFIGS = [
         optimizer=_optimizer.AdamW(clip_gradient_norm=1.0),
         ema_decay=0.999,
         weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi05_base/params"),
-        num_train_steps=20_000,
+        num_train_steps=30_000,
     ),
     # LoRA variant of the forklift config: PaliGemma backbone + action expert are frozen
     # except for LoRA adapters, which fits comfortably on a single 24-32 GB GPU.
@@ -836,10 +836,10 @@ _CONFIGS = [
             action_expert_variant="gemma_300m_lora",
         ),
         data=LeRobotForkliftDataConfig(
-            repo_id="local/forklift_stage3",
+            repo_id="tduggan93/forklift",
             base_config=DataConfig(prompt_from_task=True),
         ),
-        batch_size=32,
+        batch_size=16,
         lr_schedule=_optimizer.CosineDecaySchedule(
             warmup_steps=1_000,
             peak_lr=1e-4,
@@ -850,7 +850,7 @@ _CONFIGS = [
         # EMA is disabled for LoRA finetuning (matches pi0_libero_low_mem_finetune).
         ema_decay=None,
         weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi05_base/params"),
-        num_train_steps=20_000,
+        num_train_steps=30_000,
         # The freeze filter must match the model variants above so only the LoRA params train.
         freeze_filter=pi0_config.Pi0Config(
             pi05=True,
