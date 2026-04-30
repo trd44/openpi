@@ -3,6 +3,21 @@
 Convert the `2025_extracted_pallet_handling/stage_3/` ROS2 mcap bags into a LeRobot v2.1
 dataset and fine-tune `pi05_base` on it.
 
+> **Other docs in this directory**
+> - **`TOPICS.md`** — exhaustive mapping of every ROS 2 topic the model reads and
+>   writes, with field paths and value conventions. The source of truth.
+> - **`INFERENCE.md`** — operator-facing handoff guide for running the trained
+>   model on the real robot via the policy server + a ROS 2 client.
+> - **`run_inference_ros2.py`** — the rclpy inference node referenced by
+>   `INFERENCE.md`.
+
+## Trained checkpoints
+
+| Variant | Hugging Face repo | Train config |
+|---|---|---|
+| LoRA finetune | https://huggingface.co/tduggan93/pi05-forklift-lora | `pi05_forklift_lora` |
+| Full finetune | https://huggingface.co/tduggan93/pi05-forklift-full *(may not be up yet)* | `pi05_forklift` |
+
 ## Dataset scope
 
 `stage_3` contains the **closed-loop visual-servo engagement phases** of pallet handling:
