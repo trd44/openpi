@@ -23,8 +23,8 @@ from __future__ import annotations
 
 import argparse
 import logging
+import math
 import threading
-import time
 from dataclasses import dataclass
 from typing import Optional
 
@@ -35,8 +35,8 @@ from rclpy.node import Node
 from rclpy.qos import QoSDurabilityPolicy, QoSHistoryPolicy, QoSProfile, QoSReliabilityPolicy
 from rclpy.qos import qos_profile_sensor_data
 
-from sensor_msgs.msg import CompressedImage
-from hopper_msgs.msg import Commands, LinearsStamped, DriveStamped
+from sensor_msgs.msg import CompressedImage, JointState
+from hopper_msgs.msg import Commands
 
 # openpi_client lives in openpi/packages/openpi-client. Install it once with:
 #     uv pip install -e packages/openpi-client
@@ -46,27 +46,58 @@ from openpi_client import action_chunk_broker, websocket_client_policy
 
 # --- topic / shape constants (must match TOPICS.md exactly) -------------------
 TOPIC_IMAGE = "/zed2i_top/zed2i/warped/left/image_rect_color/compressed"
-TOPIC_LINEARS = "/crayler/linears_stamped"
-TOPIC_DRIVE = "/crayler/drive_stamped"
+TOPIC_JOINT_STATES = "/joint_states"
 TOPIC_JOINT_COMMANDS = "/joint_commands"
 
 IMAGE_HW = 224
-STATE_DIM = 10
+STATE_DIM = 6
 ACTION_DIM = 5
 ACTION_HORIZON = 10  # must match Pi0Config(action_horizon=10) used in training
 INFER_HZ = 10.0      # must match the dataset fps
 
-# Per-axis active_control to set on every published Commands message.
-# (Kept in sync with TOPICS.md and the training-data convention.)
+# --- /joint_states joint names (looked up by name in JointState.name) ---------
+JOINT_LIFT_FIXED = "lift_lift_fixed"
+JOINT_FORK_PLATE_LIFT = "fork_plate_lift"
+JOINT_FORK_SIDE_SHIFT = "fork_side_shift"
+JOINT_REAR_LINKAGE_PART2 = "rear_linkage_part2"
+JOINT_LINKAGE_PART2_LINKAGE = "linkage_part2_linkage"
+JOINT_FRONT_LEFT_MOTOR = "front_left_motor"
+JOINT_FRONT_RIGHT_MOTOR = "front_right_motor"
+JOINT_REAR_LEFT_MOTOR = "rear_left_motor"
+JOINT_REAR_RIGHT_MOTOR = "rear_right_motor"
+
+REQUIRED_JOINTS = (
+    JOINT_LIFT_FIXED,
+    JOINT_FORK_PLATE_LIFT,
+    JOINT_FORK_SIDE_SHIFT,
+    JOINT_REAR_LINKAGE_PART2,
+    JOINT_LINKAGE_PART2_LINKAGE,
+    JOINT_FRONT_LEFT_MOTOR,
+    JOINT_FRONT_RIGHT_MOTOR,
+    JOINT_REAR_LEFT_MOTOR,
+    JOINT_REAR_RIGHT_MOTOR,
+)
+
+# Wheel rad/s -> body m/s scaling (must match the converter).
+# 2.07345 m is the wheel circumference; (rad/s) * (circumference / 2π) = m/s.
+WHEEL_RADPS_TO_MPS = 2.07345 / (2.0 * math.pi)
+
+# --- Per-axis active_control byte to set on every published Commands message --
+# Matches the training-data convention and TOPICS.md:
+#   DRIVE -> VEL  (velocity_commands[0])
+#   STEER -> VEL  (velocity_commands[1])  <-- platform commands steering as a rate
+#   LIFT  -> POS  (position_commands[2])
+#   SHIFT -> POS  (position_commands[3])
+#   TILT  -> POS  (position_commands[4])
 _ACTIVE_OFF = 0
 _ACTIVE_POS = 1
 _ACTIVE_VEL = 2
 ACTIVE_CONTROL = bytes(
     [
         _ACTIVE_VEL,  # DRIVE
-        _ACTIVE_POS,  # STEER
+        _ACTIVE_VEL,  # STEER (steering_rate)
         _ACTIVE_POS,  # LIFT
-        _ACTIVE_OFF,  # SHIFT
+        _ACTIVE_POS,  # SHIFT
         _ACTIVE_POS,  # TILT
     ]
 )
@@ -120,13 +151,15 @@ class ForkliftInferenceNode(Node):
         self._period = 1.0 / infer_hz
 
         self._latest_image = _Latest()
-        self._latest_linears = _Latest()
-        self._latest_drive = _Latest()
+        self._latest_joint_states = _Latest()
+
+        # Cached name -> array-index lookup, populated lazily off the first
+        # /joint_states message (the joint name list is stable within a session).
+        self._joint_index: dict[str, int] | None = None
 
         # Subscriptions
         self.create_subscription(CompressedImage, TOPIC_IMAGE, self._on_image, _QOS_SENSOR)
-        self.create_subscription(LinearsStamped, TOPIC_LINEARS, self._on_linears, _QOS_CONTROL)
-        self.create_subscription(DriveStamped, TOPIC_DRIVE, self._on_drive, _QOS_CONTROL)
+        self.create_subscription(JointState, TOPIC_JOINT_STATES, self._on_joint_states, _QOS_CONTROL)
 
         # Publisher
         self._cmd_pub = self.create_publisher(Commands, TOPIC_JOINT_COMMANDS, _QOS_CONTROL)
@@ -149,11 +182,21 @@ class ForkliftInferenceNode(Node):
     def _on_image(self, msg: CompressedImage) -> None:
         self._latest_image.set(msg)
 
-    def _on_linears(self, msg: LinearsStamped) -> None:
-        self._latest_linears.set(msg)
-
-    def _on_drive(self, msg: DriveStamped) -> None:
-        self._latest_drive.set(msg)
+    def _on_joint_states(self, msg: JointState) -> None:
+        if self._joint_index is None:
+            idx = {n: i for i, n in enumerate(msg.name)}
+            missing = [n for n in REQUIRED_JOINTS if n not in idx]
+            if missing:
+                self.get_logger().error(
+                    f"/joint_states is missing required joint(s): {missing}. "
+                    f"Got names: {list(msg.name)}"
+                )
+                return
+            self._joint_index = idx
+            self.get_logger().info(
+                f"cached joint-name index: {[(n, idx[n]) for n in REQUIRED_JOINTS]}"
+            )
+        self._latest_joint_states.set(msg)
 
     # --- helpers -----------------------------------------------------------
     @staticmethod
@@ -166,23 +209,34 @@ class ForkliftInferenceNode(Node):
         rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
         return np.ascontiguousarray(rgb)
 
-    @staticmethod
-    def _state_from(linears: LinearsStamped, drive: DriveStamped) -> np.ndarray:
-        lin = linears.linears
-        drv = drive.drive
+    def _state_from_joint_states(self, js: JointState) -> np.ndarray:
+        """Build the 6-d state vector by name-lookup into a JointState message.
+
+        State order:
+          [0] lift                = position[lift_lift_fixed] + position[fork_plate_lift]
+          [1] shift               = position[fork_side_shift]
+          [2] steering_angle      = position[rear_linkage_part2]
+          [3] steering_angle_rate = velocity[rear_linkage_part2]
+          [4] wheel_velocity      = mean(velocity of 4 motor joints) * (circ / 2π)
+          [5] tilting_angle       = position[linkage_part2_linkage]
+        """
+        assert self._joint_index is not None  # _on_joint_states populated it
+        idx = self._joint_index
+        p = js.position
+        v = js.velocity
+        lift = p[idx[JOINT_LIFT_FIXED]] + p[idx[JOINT_FORK_PLATE_LIFT]]
+        shift = p[idx[JOINT_FORK_SIDE_SHIFT]]
+        steering_angle = p[idx[JOINT_REAR_LINKAGE_PART2]]
+        steering_angle_rate = v[idx[JOINT_REAR_LINKAGE_PART2]]
+        wheel_v = (
+            v[idx[JOINT_FRONT_LEFT_MOTOR]]
+            + v[idx[JOINT_FRONT_RIGHT_MOTOR]]
+            + v[idx[JOINT_REAR_LEFT_MOTOR]]
+            + v[idx[JOINT_REAR_RIGHT_MOTOR]]
+        ) * 0.25 * WHEEL_RADPS_TO_MPS
+        tilting_angle = p[idx[JOINT_LINKAGE_PART2_LINKAGE]]
         return np.array(
-            [
-                lin.lin_pot_left,
-                lin.lin_pot_right,
-                lin.lin_pot_vertical,
-                float(lin.length_hubmast),
-                float(lin.length_seitenhub),
-                drv.steering_angle,
-                drv.steering_angle_rate,
-                drv.front_left_speed,
-                drv.front_right_speed,
-                drv.rho,
-            ],
+            [lift, shift, steering_angle, steering_angle_rate, wheel_v, tilting_angle],
             dtype=np.float32,
         )
 
@@ -191,9 +245,9 @@ class ForkliftInferenceNode(Node):
 
         Per-axis convention (matches TOPICS.md):
           DRIVE  -> velocity_commands[0]   active_control[0] = VEL
-          STEER  -> position_commands[1]   active_control[1] = POS
+          STEER  -> velocity_commands[1]   active_control[1] = VEL  (steering_rate)
           LIFT   -> position_commands[2]   active_control[2] = POS
-          SHIFT  -> 0.0 (ignored)          active_control[3] = OFF
+          SHIFT  -> position_commands[3]   active_control[3] = POS
           TILT   -> position_commands[4]   active_control[4] = POS
         """
         msg = Commands()
@@ -203,14 +257,14 @@ class ForkliftInferenceNode(Node):
 
         msg.position_commands = [
             0.0,
-            float(action[1]),  # STEER
+            0.0,
             float(action[2]),  # LIFT
-            0.0,               # SHIFT (ignored)
+            float(action[3]),  # SHIFT
             float(action[4]),  # TILT
         ]
         msg.velocity_commands = [
             float(action[0]),  # DRIVE
-            0.0,
+            float(action[1]),  # STEER (steering_rate)
             0.0,
             0.0,
             0.0,
@@ -230,9 +284,8 @@ class ForkliftInferenceNode(Node):
     # --- main loop ---------------------------------------------------------
     def _tick(self) -> None:
         img_msg = self._latest_image.get()
-        lin_msg = self._latest_linears.get()
-        drv_msg = self._latest_drive.get()
-        if img_msg is None or lin_msg is None or drv_msg is None:
+        js_msg = self._latest_joint_states.get()
+        if img_msg is None or js_msg is None or self._joint_index is None:
             self._warn_once(
                 "waiting for first message on each input topic before inference starts ..."
             )
@@ -244,7 +297,7 @@ class ForkliftInferenceNode(Node):
             self.get_logger().error(f"image decode failed: {e}")
             return
 
-        state = self._state_from(lin_msg, drv_msg)
+        state = self._state_from_joint_states(js_msg)
 
         obs = {
             "observation/image": image,
@@ -275,7 +328,7 @@ class ForkliftInferenceNode(Node):
         if self._tick_idx % int(INFER_HZ) == 0:
             self.get_logger().info(
                 f"tick {self._tick_idx:5d}  "
-                f"action=[drv={action[0]:+.3f} str={action[1]:+.3f} "
+                f"action=[drv={action[0]:+.3f} str_rate={action[1]:+.3f} "
                 f"lft={action[2]:+.3f} shf={action[3]:+.3f} tlt={action[4]:+.3f}]  "
                 f"published={self._publish_actions}"
             )
@@ -289,7 +342,7 @@ def main() -> None:
         "--task",
         required=True,
         help='Language prompt, e.g. "Engage the forks under the pallet on the ground". '
-        "Must be one of the six prompts the model was trained on (see TOPICS.md), "
+        "Must be one of the four prompts the model was trained on (see TOPICS.md), "
         "or paraphrasing thereof at your own risk.",
     )
     parser.add_argument(

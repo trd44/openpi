@@ -29,11 +29,21 @@ from lerobot.common.datasets.lerobot_dataset import LeRobotDataset
 
 EXPECTED_FEATURES = {
     "image": {"shape": (224, 224, 3), "dtype": "image"},
-    "state": {"shape": (10,), "dtype": "float32"},
-    "actions": {"shape": (10,), "dtype": "float32"},
+    "state": {"shape": (6,), "dtype": "float32"},
+    "actions": {"shape": (5,), "dtype": "float32"},
     "pallet_delta": {"shape": (3,), "dtype": "float32"},
     "pallet_delta_valid": {"shape": (1,), "dtype": "bool"},
 }
+
+STATE_DIM_NAMES = [
+    "lift",
+    "shift",
+    "steering_angle",
+    "steering_angle_rate",
+    "wheel_velocity",
+    "tilting_angle",
+]
+ACTION_DIM_NAMES = ["drive", "steer_rate", "lift", "shift", "tilt"]
 
 EXPECTED_EPISODE_COUNTS = {
     ("g_g", "EnterPallet"): 36,
@@ -189,12 +199,14 @@ def check_global_stats(ds: LeRobotDataset, max_frames: int = 5000) -> None:
     for j in range(S.shape[1]):
         col = S[:, j]
         marker = " <-- ALL ZERO" if np.allclose(col, 0) else (" <-- std=0" if col.std() == 0 else "")
-        print(f"    [{j:2d}] {col.min():12.4f}  {col.max():12.4f}  {col.mean():12.4f}  {col.std():12.4f}{marker}")
+        name = STATE_DIM_NAMES[j] if j < len(STATE_DIM_NAMES) else f"dim{j}"
+        print(f"    [{j:2d}] {name:>20s}  {col.min():12.4f}  {col.max():12.4f}  {col.mean():12.4f}  {col.std():12.4f}{marker}")
     print("  action per-dim (min, max, mean, std):")
     for j in range(A.shape[1]):
         col = A[:, j]
         marker = " <-- ALL ZERO" if np.allclose(col, 0) else (" <-- std=0" if col.std() == 0 else "")
-        print(f"    [{j:2d}] {col.min():12.4f}  {col.max():12.4f}  {col.mean():12.4f}  {col.std():12.4f}{marker}")
+        name = ACTION_DIM_NAMES[j] if j < len(ACTION_DIM_NAMES) else f"dim{j}"
+        print(f"    [{j:2d}] {name:>20s}  {col.min():12.4f}  {col.max():12.4f}  {col.mean():12.4f}  {col.std():12.4f}{marker}")
     if deltas:
         D = np.stack(deltas)
         v = np.array(valids)

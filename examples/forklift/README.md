@@ -42,32 +42,30 @@ Episode counts in stage_3:
 | Feature | Shape | Source |
 |---|---|---|
 | `image` | (224, 224, 3) uint8 | `/zed2i_top/zed2i/warped/left/image_rect_color/compressed` |
-| `state` | (10,) float32 | `linears_stamped` + `drive_stamped` |
-| `actions` | (5,) float32 | `/joint_commands` per-axis active channel |
+| `state` | (6,) float32 | `/joint_states` (single topic, name-lookup) |
+| `actions` | (5,) float32 | `/crayler/controls_stamped` (per-axis `x_d` reference) |
 | `pallet_delta` | (3,) float32 | `/pallet_slot_pose_info` (`pallet_to_fork_mid` for EnterPallet, `slot_to_fork_mid` for EnterSlot) |
 | `pallet_delta_valid` | (1,) bool | False until the synthetic topic publishes its first valid transform |
 | `task` | str | path-derived language string |
 
-`state` order: `[lin_pot_left, lin_pot_right, lin_pot_vertical, length_hubmast,
-length_seitenhub, steering_angle, steering_angle_rate, front_left_speed,
-front_right_speed, rho]`.
+`state` order: `[lift, shift, steering_angle, steering_angle_rate, wheel_velocity,
+tilting_angle]` — all read from `/joint_states` by `name.index(...)` lookup.
+`lift` sums two joints (`lift_lift_fixed + fork_plate_lift`); `wheel_velocity` is
+the mean of the four motor `velocity` entries scaled by `2.07345 / (2π)` (rad/s →
+body m/s using the wheel circumference).
 
-`actions` order: `[drive, steer, lift, shift, tilt]`. Each value is the command on
-whichever channel is active for that axis according to the `Commands.msg`
-`active_control` flag (one of POS/VEL/EFF/FF; OFF → 0). In `stage_3` the active
-mapping is:
+`actions` order: `[drive, steer, lift, shift, tilt]`, all read from per-axis
+`PlcPidState.x_d` in `/crayler/controls_stamped`. STEER specifically reads from
+`steering_rate` (a velocity), **not** `steering` (a position) — the platform's
+classical controller commands steering as a rate.
 
-| axis | active control in stage_3 | range observed |
-|---|---|---|
-| `drive` | VEL | -0.6 … 0.8 |
-| `steer` | POS | -0.6 … 0.6 rad |
-| `lift`  | POS | 0 … 1.7 |
-| `shift` | OFF (always 0) | — |
-| `tilt`  | POS | -0.02 … 0.19 rad |
-
-`shift` is kept as a placeholder so a runtime that emits a 5-axis Commands msg has a
-slot. If you ever record data where SHIFT is commanded, the converter will pick it
-up automatically (it reads `active_control[i]` per frame).
+| axis | source `PlcPidState` | unit | observed range (sampled) |
+|---|---|---|---|
+| `drive` | `controls.driving.x_d`        | m/s   | -0.4 … 0.8 |
+| `steer` | `controls.steering_rate.x_d`  | rad/s | -0.17 … 0.46 |
+| `lift`  | `controls.lifting.x_d`        | m     | 0 … 1.82 |
+| `shift` | `controls.shifting.x_d`       | m     | -0.08 … 0.08 |
+| `tilt`  | `controls.tilting.x_d`        | rad   | -0.02 … 0.20 |
 
 `pallet_delta` is stored in the dataset but is **not** wired into the model input by
 default — it's there for ablations. Add `"observation/pallet_delta": "pallet_delta"`
@@ -80,12 +78,12 @@ masked off in `ForkliftInputs`.
 
 ## Topic alignment (10 Hz, ZOH)
 
-ROS2 topics here publish at mixed rates (~5 Hz for the camera, ~25 Hz for control/state,
-~24 Hz for `/pallet_slot_pose_info`, ~5 Hz for `/joint_commands`). The converter:
+ROS2 topics here publish at mixed rates (~5 Hz for the camera, ~25 Hz for `/joint_states`
+and `/crayler/controls_stamped`, ~24 Hz for `/pallet_slot_pose_info`). The converter:
 
 1. Reads all messages and bins them per-topic by `header.stamp` (falling back to log time).
-2. Picks an episode start time = the latest first-sample time across the four required
-   topics (image, linears, drive, joint_commands), so every emitted frame has all
+2. Picks an episode start time = the latest first-sample time across the three required
+   topics (image, joint_states, controls_stamped), so every emitted frame has all
    features valid from frame 0.
 3. Steps a uniform 10 Hz grid and pulls the **most recent message with `stamp <= t_k`**
    per topic (zero-order hold).

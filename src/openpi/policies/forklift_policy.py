@@ -8,9 +8,13 @@ from openpi.models import model as _model
 
 
 def make_forklift_example() -> dict:
-    """Creates a random input example for the forklift policy."""
+    """Creates a random input example for the forklift policy.
+
+    State is 6-d: [lift, shift, steering_angle, steering_angle_rate, wheel_velocity,
+    tilting_angle], all read from a single /joint_states message at runtime.
+    """
     return {
-        "observation/state": np.random.rand(10).astype(np.float32),
+        "observation/state": np.random.rand(6).astype(np.float32),
         "observation/image": np.random.randint(256, size=(224, 224, 3), dtype=np.uint8),
         "prompt": "Engage the forks under the pallet on the ground",
     }

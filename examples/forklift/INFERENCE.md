@@ -98,12 +98,24 @@ before you start the policy):
 
 ```bash
 ros2 topic hz /zed2i_top/zed2i/warped/left/image_rect_color/compressed
-ros2 topic hz /crayler/linears_stamped
-ros2 topic hz /crayler/drive_stamped
+ros2 topic hz /joint_states
 ```
 
-If any of those is silent, the policy can't run — fix the upstream pipeline
-first.
+If either is silent, the policy can't run — fix the upstream pipeline first.
+
+Also confirm that `/joint_states` is publishing the joints the model expects
+(name strings must match exactly):
+
+```bash
+ros2 topic echo --once /joint_states | grep -A1 'name:'
+# expect to see: lift_lift_fixed, fork_plate_lift, fork_side_shift,
+#                rear_linkage_part2, linkage_part2_linkage,
+#                front_left_motor, front_right_motor,
+#                rear_left_motor, rear_right_motor
+```
+
+If the joint names differ (e.g. a renamed URDF), the inference node will log
+which ones are missing and refuse to start.
 
 ---
 
@@ -125,8 +137,9 @@ Expected output (every second, summarizing the previous 10 ticks):
 ```
 [INFO] Connecting to policy server at ws://192.168.1.42:8000 ...
 [INFO] Server metadata: {...}
-[INFO] tick    10  action=[drv=+0.123 str=+0.005 lft=+0.040 shf=+0.000 tlt=+0.001] published=False
-[INFO] tick    20  action=[drv=+0.118 str=+0.011 lft=+0.041 shf=+0.000 tlt=+0.001] published=False
+[INFO] cached joint-name index: [...]
+[INFO] tick    10  action=[drv=+0.123 str_rate=+0.012 lft=+0.040 shf=+0.001 tlt=+0.001] published=False
+[INFO] tick    20  action=[drv=+0.118 str_rate=+0.018 lft=+0.041 shf=+0.001 tlt=+0.001] published=False
 ...
 ```
 
@@ -135,7 +148,8 @@ Things to verify before you let it actuate:
 1. The connection succeeds and you see at least 30+ ticks of healthy output.
 2. `drv` is in the rough range you'd expect (the model was trained on driving
    velocities roughly in `[-0.6, 0.8]`).
-3. `shf` is always `+0.000` — that axis is intentionally suppressed.
+3. `str_rate` is a *rate* (rad/s), not an absolute angle. Values near zero are
+   normal when going straight; expect short bursts of ±0.1–0.3 during steering.
 4. The robot is positioned similarly to how it was during data collection: a
    pallet visible in front of it, fork height/tilt in a sensible starting
    configuration.
@@ -196,11 +210,11 @@ See **`TOPICS.md`** for the full mapping. Short version: every 100 ms it
 publishes one `hopper_msgs/Commands` on `/joint_commands` with
 
 - `velocity_commands[0]` = drive velocity (model output 0)
-- `position_commands[1]` = steer angle (model output 1)
+- `velocity_commands[1]` = steering rate (model output 1)
 - `position_commands[2]` = lift position (model output 2)
-- `position_commands[3]` = 0 (shift is always OFF in stage_3)
+- `position_commands[3]` = shift position (model output 3)
 - `position_commands[4]` = tilt position (model output 4)
-- `active_control` = `\x02\x01\x01\x00\x01` (DRIVE=VEL, STEER=POS, LIFT=POS, SHIFT=OFF, TILT=POS)
+- `active_control` = `\x02\x02\x01\x01\x01` (DRIVE=VEL, STEER=VEL, LIFT=POS, SHIFT=POS, TILT=POS)
 - everything else zeroed out, `is_stop=False`, `is_joy_control=False`.
 
 The model emits a 10-step action chunk (1 second of action at 10 Hz). The
@@ -217,11 +231,18 @@ The forklift PC can't reach the GPU host. Check `ping <gpu-ip>` and that port
 
 **"waiting for first message on each input topic"** appears once and never
 clears.
-One of the three input topics isn't publishing. Run the `ros2 topic hz`
-checks from §2 again. If the image topic is publishing under a different
-name on this robot (e.g. nodelet remapping), edit the `TOPIC_*` constants at
-the top of `run_inference_ros2.py` *and* re-record / re-train if the data
-were collected against a different topic name.
+Either `/zed2i_top/...` or `/joint_states` isn't publishing. Run the `ros2
+topic hz` checks from §2 again. If the image topic is publishing under a
+different name on this robot (e.g. nodelet remapping), edit the `TOPIC_*`
+constants at the top of `run_inference_ros2.py` *and* re-record / re-train
+if the data were collected against a different topic name.
+
+**`/joint_states is missing required joint(s): [...]`** at startup.
+The URDF / robot_state_publisher on this machine names a joint differently
+than the bag did. The script logs which joints are missing. Either rename
+in your URDF, or update the `JOINT_*` constants at the top of
+`run_inference_ros2.py` *and* the matching constants in
+`convert_stage3_to_lerobot.py` (and re-convert + retrain).
 
 **`cv2.imdecode returned None`.**
 The image stream is not JPEG-compressed BGR. Check
@@ -239,10 +260,11 @@ against any frame from the dataset.
 
 **Actions look reasonable but the robot doesn't move / moves wrong.**
 The downstream controller might require a different `active_control` byte
-than the one this node sends. `\x02\x01\x01\x00\x01` matches the convention
-seen in the training bags; if your controller expects something different,
-edit `ACTIVE_CONTROL` at the top of `run_inference_ros2.py`. Worth diffing
-against a live `ros2 topic echo /joint_commands` recording from a successful
+than the one this node sends. `\x02\x02\x01\x01\x01` matches the convention
+agreed on with the platform owner (DRIVE=VEL, STEER=VEL via `steering_rate`,
+LIFT/SHIFT/TILT=POS); if your controller expects something different, edit
+`ACTIVE_CONTROL` at the top of `run_inference_ros2.py`. Worth diffing against
+a live `ros2 topic echo /joint_commands` recording from a successful
 classical-control run.
 
 **OOM when starting the server.**
