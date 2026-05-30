@@ -6,6 +6,14 @@ Source layout (input):
 Each measurement directory becomes one LeRobot episode. Topics are re-sampled to a
 uniform 10 Hz grid (zero-order hold / last-known-value).
 
+State (6-d) is read from /joint_states (single topic for proprio).
+Action (5-d) is read from /crayler/controls_stamped, which captures the real-time
+controller's setpoints including commands sent over shared memory that bypass
+/joint_commands. STEER specifically uses ``steering_rate.x_d`` (velocity), matching
+the platform's classical-control convention.
+
+See ``TOPICS.md`` next to this file for the full field-by-field spec.
+
 Install the extra deps before running:
     uv pip install mcap mcap-ros2-support opencv-python
 
@@ -32,27 +40,47 @@ import tyro
 
 
 IMAGE_TOPIC = "/zed2i_top/zed2i/warped/left/image_rect_color/compressed"
-LINEARS_TOPIC = "/crayler/linears_stamped"
-DRIVE_TOPIC = "/crayler/drive_stamped"
-COMMANDS_TOPIC = "/joint_commands"
+JOINT_STATES_TOPIC = "/joint_states"
+CONTROLS_TOPIC = "/crayler/controls_stamped"
 PALLET_INFO_TOPIC = "/pallet_slot_pose_info"
 CURRENT_TASK_TOPIC = "/current_task"
 
-REQUIRED_TOPICS = {IMAGE_TOPIC, LINEARS_TOPIC, DRIVE_TOPIC, COMMANDS_TOPIC}
+REQUIRED_TOPICS = {IMAGE_TOPIC, JOINT_STATES_TOPIC, CONTROLS_TOPIC}
 OPTIONAL_TOPICS = {PALLET_INFO_TOPIC, CURRENT_TASK_TOPIC}
 ALL_TOPICS = REQUIRED_TOPICS | OPTIONAL_TOPICS
 
 IMAGE_HW = 224
-STATE_DIM = 10
+STATE_DIM = 6
 ACTION_DIM = 5
 PALLET_DELTA_DIM = 3
 
-# Commands.msg active_control values (per axis: DRIVE, STEER, LIFT, SHIFT, TILT).
-_ACTIVE_OFF = 0
-_ACTIVE_POS = 1
-_ACTIVE_VEL = 2
-_ACTIVE_EFF = 3
-_ACTIVE_FF = 4
+# Joint names used for the state vector (read from sensor_msgs/JointState.name lookup).
+_JOINT_LIFT_FIXED = "lift_lift_fixed"
+_JOINT_FORK_PLATE_LIFT = "fork_plate_lift"
+_JOINT_FORK_SIDE_SHIFT = "fork_side_shift"
+_JOINT_REAR_LINKAGE_PART2 = "rear_linkage_part2"
+_JOINT_LINKAGE_PART2_LINKAGE = "linkage_part2_linkage"
+_JOINT_FRONT_LEFT_MOTOR = "front_left_motor"
+_JOINT_FRONT_RIGHT_MOTOR = "front_right_motor"
+_JOINT_REAR_LEFT_MOTOR = "rear_left_motor"
+_JOINT_REAR_RIGHT_MOTOR = "rear_right_motor"
+
+REQUIRED_JOINTS = (
+    _JOINT_LIFT_FIXED,
+    _JOINT_FORK_PLATE_LIFT,
+    _JOINT_FORK_SIDE_SHIFT,
+    _JOINT_REAR_LINKAGE_PART2,
+    _JOINT_LINKAGE_PART2_LINKAGE,
+    _JOINT_FRONT_LEFT_MOTOR,
+    _JOINT_FRONT_RIGHT_MOTOR,
+    _JOINT_REAR_LEFT_MOTOR,
+    _JOINT_REAR_RIGHT_MOTOR,
+)
+
+# Wheel rad/s -> body m/s scaling. 2.07345 m is the wheel circumference; dividing by
+# 2*pi converts radians-per-second to revolutions-per-second, then multiplying by the
+# circumference gives meters-per-second along the driving direction.
+_WHEEL_RADPS_TO_MPS = 2.07345 / (2.0 * math.pi)
 
 # Path-derived language strings. Keys are (scenario, operation).
 TASK_STRINGS: dict[tuple[str, str], str] = {
@@ -70,7 +98,6 @@ def _stamp_ns(stamp) -> int:
 
 
 def _quat_to_yaw(x: float, y: float, z: float, w: float) -> float:
-    # Standard ZYX yaw extraction.
     siny_cosp = 2.0 * (w * z + x * y)
     cosy_cosp = 1.0 - 2.0 * (y * y + z * z)
     return math.atan2(siny_cosp, cosy_cosp)
@@ -87,52 +114,77 @@ def _decode_image(msg: Any) -> np.ndarray:
     return np.ascontiguousarray(rgb)
 
 
-def _state_from_msgs(linears_msg: Any, drive_msg: Any) -> np.ndarray:
-    lin = linears_msg.linears
-    drv = drive_msg.drive
+@dataclass
+class _JointIndex:
+    """Cached name -> array-index lookup for sensor_msgs/JointState messages.
+
+    The ``name`` array of a /joint_states message is stable within a bag, so once
+    we build the lookup off the first message we can keep using it.
+    """
+
+    idx: dict[str, int]
+
+    @classmethod
+    def from_msg(cls, msg: Any) -> "_JointIndex":
+        return cls(idx={n: i for i, n in enumerate(msg.name)})
+
+    def lookup(self, name: str) -> int:
+        try:
+            return self.idx[name]
+        except KeyError as e:
+            raise RuntimeError(f"joint {name!r} not present in /joint_states.name") from e
+
+
+def _state_from_joint_states(msg: Any, jx: _JointIndex) -> np.ndarray:
+    """Build the 6-d state vector from a /joint_states message.
+
+    Order:
+      [0] lift                = position[lift_lift_fixed] + position[fork_plate_lift]
+      [1] shift               = position[fork_side_shift]
+      [2] steering_angle      = position[rear_linkage_part2]
+      [3] steering_angle_rate = velocity[rear_linkage_part2]
+      [4] wheel_velocity      = mean(velocity of 4 motor joints) * (circumference / 2π)
+      [5] tilting_angle       = position[linkage_part2_linkage]
+    """
+    p = msg.position
+    v = msg.velocity
+    lift = p[jx.lookup(_JOINT_LIFT_FIXED)] + p[jx.lookup(_JOINT_FORK_PLATE_LIFT)]
+    shift = p[jx.lookup(_JOINT_FORK_SIDE_SHIFT)]
+    steering_angle = p[jx.lookup(_JOINT_REAR_LINKAGE_PART2)]
+    steering_angle_rate = v[jx.lookup(_JOINT_REAR_LINKAGE_PART2)]
+    wheel_v = (
+        v[jx.lookup(_JOINT_FRONT_LEFT_MOTOR)]
+        + v[jx.lookup(_JOINT_FRONT_RIGHT_MOTOR)]
+        + v[jx.lookup(_JOINT_REAR_LEFT_MOTOR)]
+        + v[jx.lookup(_JOINT_REAR_RIGHT_MOTOR)]
+    ) * 0.25 * _WHEEL_RADPS_TO_MPS
+    tilting_angle = p[jx.lookup(_JOINT_LINKAGE_PART2_LINKAGE)]
     return np.array(
-        [
-            lin.lin_pot_left,
-            lin.lin_pot_right,
-            lin.lin_pot_vertical,
-            float(lin.length_hubmast),
-            float(lin.length_seitenhub),
-            drv.steering_angle,
-            drv.steering_angle_rate,
-            drv.front_left_speed,
-            drv.front_right_speed,
-            drv.rho,
-        ],
+        [lift, shift, steering_angle, steering_angle_rate, wheel_v, tilting_angle],
         dtype=np.float32,
     )
 
 
-def _action_from_msg(commands_msg: Any) -> np.ndarray:
-    """Per-axis 'fused' action: take the active control channel for each of the 5 axes.
+def _action_from_controls(controls_msg: Any) -> np.ndarray:
+    """Per-axis action target from /crayler/controls_stamped using the ``x_d`` reference.
 
-    Output order: [DRIVE, STEER, LIFT, SHIFT, TILT]. If an axis's active_control is OFF,
-    the value is 0. In stage_3 the controller publishes:
-      DRIVE -> VEL, STEER -> POS, LIFT -> POS, SHIFT -> OFF, TILT -> POS.
+    Axis order: [DRIVE, STEER, LIFT, SHIFT, TILT].
+
+    NOTE: STEER reads from ``steering_rate`` (velocity), not ``steering`` (position) —
+    this matches the platform's classical-control convention. The forklift's runtime
+    controls steering as a rate, and ``steering`` is rarely active.
     """
-    pos = commands_msg.position_commands
-    vel = commands_msg.velocity_commands
-    eff = commands_msg.effort_commands
-    ff = commands_msg.ff_commands
-    # active_control is a length-5 byte string (uint8[5]).
-    active = commands_msg.active_control
-    out = np.zeros(ACTION_DIM, dtype=np.float32)
-    for i in range(ACTION_DIM):
-        a = active[i] if isinstance(active, (bytes, bytearray)) else int(active[i])
-        if a == _ACTIVE_POS:
-            out[i] = pos[i]
-        elif a == _ACTIVE_VEL:
-            out[i] = vel[i]
-        elif a == _ACTIVE_EFF:
-            out[i] = eff[i]
-        elif a == _ACTIVE_FF:
-            out[i] = ff[i]
-        # else OFF -> stays 0
-    return out
+    c = controls_msg.controls if hasattr(controls_msg, "controls") else controls_msg
+    return np.array(
+        [
+            c.driving.x_d,
+            c.steering_rate.x_d,
+            c.lifting.x_d,
+            c.shifting.x_d,
+            c.tilting.x_d,
+        ],
+        dtype=np.float32,
+    )
 
 
 def _pallet_delta_from_msg(msg: Any, operation: str) -> tuple[np.ndarray, bool]:
@@ -188,7 +240,6 @@ def _read_bag(bag_path: Path) -> dict[str, _TopicSeries]:
     for m in read_ros2_messages(str(bag_path), topics=list(ALL_TOPICS)):
         topic = m.channel.topic
         msg = m.ros_msg
-        # Prefer the message's own header stamp; fall back to log time.
         header = getattr(msg, "header", None)
         if header is not None and (header.stamp.sec != 0 or header.stamp.nanosec != 0):
             ts = _stamp_ns(header.stamp)
@@ -219,28 +270,33 @@ def _build_frames(
 ) -> list[dict[str, Any]]:
     period_ns = 1_000_000_000 // fps
 
-    # Episode time window: start when every required topic has at least one sample.
     required_first = []
     for t in REQUIRED_TOPICS:
         first = series[t].first_ns
         if first is None:
-            return []  # missing required topic in this bag
+            return []
         required_first.append(first)
     start_ns = max(required_first)
 
-    # End at the last sample of any required topic (so we don't run past sensor data).
     end_ns = min(int(series[t].times[-1]) for t in REQUIRED_TOPICS)
     if end_ns <= start_ns:
+        return []
+
+    # Cache joint name -> index from the first /joint_states message of the bag.
+    js_first = series[JOINT_STATES_TOPIC].msgs[0]
+    jx = _JointIndex.from_msg(js_first)
+    missing = [n for n in REQUIRED_JOINTS if n not in jx.idx]
+    if missing:
+        print(f"  [skip] /joint_states is missing required joints: {missing}")
         return []
 
     frames: list[dict[str, Any]] = []
     t_ns = start_ns
     while t_ns <= end_ns:
         img_msg = series[IMAGE_TOPIC].latest_at(t_ns)
-        lin_msg = series[LINEARS_TOPIC].latest_at(t_ns)
-        drv_msg = series[DRIVE_TOPIC].latest_at(t_ns)
-        cmd_msg = series[COMMANDS_TOPIC].latest_at(t_ns)
-        if img_msg is None or lin_msg is None or drv_msg is None or cmd_msg is None:
+        js_msg = series[JOINT_STATES_TOPIC].latest_at(t_ns)
+        ctrl_msg = series[CONTROLS_TOPIC].latest_at(t_ns)
+        if img_msg is None or js_msg is None or ctrl_msg is None:
             t_ns += period_ns
             continue
 
@@ -254,8 +310,8 @@ def _build_frames(
         frames.append(
             {
                 "image": _decode_image(img_msg),
-                "state": _state_from_msgs(lin_msg, drv_msg),
-                "actions": _action_from_msg(cmd_msg),
+                "state": _state_from_joint_states(js_msg, jx),
+                "actions": _action_from_controls(ctrl_msg),
                 "pallet_delta": pallet_delta,
                 "pallet_delta_valid": np.array([pallet_delta_valid], dtype=bool),
             }
@@ -269,9 +325,6 @@ def _episode_task(scenario: str, operation: str, series: dict[str, _TopicSeries]
     if fallback is None:
         fallback = f"{scenario} {operation}"
 
-    # Prefer any explicit /current_task value if it's a known operation tag, but always
-    # return the human-readable fallback string. /current_task in this dataset just
-    # echoes "EnterPallet"/"EnterSlot", so it's only used to validate the directory.
     ct = series.get(CURRENT_TASK_TOPIC)
     if ct is not None and ct.times.size > 0:
         seen = {m.data for m in ct.msgs}
@@ -294,27 +347,23 @@ def _build_features() -> dict[str, dict[str, Any]]:
             "dtype": "float32",
             "shape": (STATE_DIM,),
             "names": [
-                "lin_pot_left",
-                "lin_pot_right",
-                "lin_pot_vertical",
-                "length_hubmast",
-                "length_seitenhub",
+                "lift",
+                "shift",
                 "steering_angle",
                 "steering_angle_rate",
-                "front_left_speed",
-                "front_right_speed",
-                "rho",
+                "wheel_velocity",
+                "tilting_angle",
             ],
         },
         "actions": {
             "dtype": "float32",
             "shape": (ACTION_DIM,),
             "names": [
-                "drive",   # vel control in stage_3
-                "steer",   # pos control
-                "lift",    # pos control
-                "shift",   # OFF in stage_3 (slot kept for inference symmetry)
-                "tilt",    # pos control
+                "drive",  # /crayler/controls_stamped -> driving.x_d   (velocity)
+                "steer",  # /crayler/controls_stamped -> steering_rate.x_d (velocity)
+                "lift",   # /crayler/controls_stamped -> lifting.x_d   (position)
+                "shift",  # /crayler/controls_stamped -> shifting.x_d  (position)
+                "tilt",   # /crayler/controls_stamped -> tilting.x_d   (position)
             ],
         },
         "pallet_delta": {
