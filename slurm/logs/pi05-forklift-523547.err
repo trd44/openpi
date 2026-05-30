@@ -1,0 +1,171 @@
+17:51:48.121 [I] Running on: pax008                                                               (3576516:train.py:196)
+INFO:2026-04-29 17:51:48,652:jax._src.xla_bridge:925: Unable to initialize backend 'rocm': module 'jaxlib.xla_extension' has no attribute 'GpuAllocatorConfig'
+17:51:48.652 [I] Unable to initialize backend 'rocm': module 'jaxlib.xla_extension' has no attribute 'GpuAllocatorConfig' (3576516:xla_bridge.py:925)
+INFO:2026-04-29 17:51:48,653:jax._src.xla_bridge:925: Unable to initialize backend 'tpu': INTERNAL: Failed to open libtpu.so: libtpu.so: cannot open shared object file: No such file or directory
+17:51:48.653 [I] Unable to initialize backend 'tpu': INTERNAL: Failed to open libtpu.so: libtpu.so: cannot open shared object file: No such file or directory (3576516:xla_bridge.py:925)
+17:51:50.756 [I] Created BasePyTreeCheckpointHandler: use_ocdbt=True, use_zarr3=False, pytree_metadata_options=PyTreeMetadataOptions(support_rich_types=False), array_metadata_store=<orbax.checkpoint._src.metadata.array_metadata_store.Store object at 0x1456d8377690> (3576516:base_pytree_checkpoint_handler.py:334)
+17:51:50.756 [I] Created BasePyTreeCheckpointHandler: use_ocdbt=True, use_zarr3=False, pytree_metadata_options=PyTreeMetadataOptions(support_rich_types=False), array_metadata_store=<orbax.checkpoint._src.metadata.array_metadata_store.Store object at 0x1456d8377690> (3576516:base_pytree_checkpoint_handler.py:334)
+17:51:50.756 [I] [thread=MainThread] Failed to get flag value for EXPERIMENTAL_ORBAX_USE_DISTRIBUTED_PROCESS_ID. (3576516:multihost.py:390)
+17:51:50.757 [I] [process=0][thread=MainThread] CheckpointManager init: checkpointers=None, item_names=None, item_handlers={'assets': <openpi.training.checkpoints.CallbackHandler object at 0x1455781e5d50>, 'train_state': <orbax.checkpoint._src.handlers.pytree_checkpoint_handler.PyTreeCheckpointHandler object at 0x1455781e5010>, 'params': <orbax.checkpoint._src.handlers.pytree_checkpoint_handler.PyTreeCheckpointHandler object at 0x1455b3c2e550>}, handler_registry=None (3576516:checkpoint_manager.py:620)
+17:51:50.757 [I] Deferred registration for item: "assets". Adding handler `<openpi.training.checkpoints.CallbackHandler object at 0x1455781e5d50>` for item "assets" and save args `<class 'openpi.training.checkpoints.CallbackSave'>` and restore args `<class 'openpi.training.checkpoints.CallbackRestore'>` to `_handler_registry`. (3576516:composite_checkpoint_handler.py:234)
+17:51:50.757 [I] Deferred registration for item: "train_state". Adding handler `<orbax.checkpoint._src.handlers.pytree_checkpoint_handler.PyTreeCheckpointHandler object at 0x1455781e5010>` for item "train_state" and save args `<class 'orbax.checkpoint._src.handlers.pytree_checkpoint_handler.PyTreeSaveArgs'>` and restore args `<class 'orbax.checkpoint._src.handlers.pytree_checkpoint_handler.PyTreeRestoreArgs'>` to `_handler_registry`. (3576516:composite_checkpoint_handler.py:234)
+17:51:50.757 [I] Deferred registration for item: "params". Adding handler `<orbax.checkpoint._src.handlers.pytree_checkpoint_handler.PyTreeCheckpointHandler object at 0x1455b3c2e550>` for item "params" and save args `<class 'orbax.checkpoint._src.handlers.pytree_checkpoint_handler.PyTreeSaveArgs'>` and restore args `<class 'orbax.checkpoint._src.handlers.pytree_checkpoint_handler.PyTreeRestoreArgs'>` to `_handler_registry`. (3576516:composite_checkpoint_handler.py:234)
+17:51:50.757 [I] Deferred registration for item: "metrics". Adding handler `<orbax.checkpoint._src.handlers.json_checkpoint_handler.JsonCheckpointHandler object at 0x1455b3a35f10>` for item "metrics" and save args `<class 'orbax.checkpoint._src.handlers.json_checkpoint_handler.JsonSaveArgs'>` and restore args `<class 'orbax.checkpoint._src.handlers.json_checkpoint_handler.JsonRestoreArgs'>` to `_handler_registry`. (3576516:composite_checkpoint_handler.py:234)
+17:51:50.757 [I] Initialized registry DefaultCheckpointHandlerRegistry({('assets', <class 'openpi.training.checkpoints.CallbackSave'>): <openpi.training.checkpoints.CallbackHandler object at 0x1455781e5d50>, ('assets', <class 'openpi.training.checkpoints.CallbackRestore'>): <openpi.training.checkpoints.CallbackHandler object at 0x1455781e5d50>, ('train_state', <class 'orbax.checkpoint._src.handlers.pytree_checkpoint_handler.PyTreeSaveArgs'>): <orbax.checkpoint._src.handlers.pytree_checkpoint_handler.PyTreeCheckpointHandler object at 0x1455781e5010>, ('train_state', <class 'orbax.checkpoint._src.handlers.pytree_checkpoint_handler.PyTreeRestoreArgs'>): <orbax.checkpoint._src.handlers.pytree_checkpoint_handler.PyTreeCheckpointHandler object at 0x1455781e5010>, ('params', <class 'orbax.checkpoint._src.handlers.pytree_checkpoint_handler.PyTreeSaveArgs'>): <orbax.checkpoint._src.handlers.pytree_checkpoint_handler.PyTreeCheckpointHandler object at 0x1455b3c2e550>, ('params', <class 'orbax.checkpoint._src.handlers.pytree_checkpoint_handler.PyTreeRestoreArgs'>): <orbax.checkpoint._src.handlers.pytree_checkpoint_handler.PyTreeCheckpointHandler object at 0x1455b3c2e550>, ('metrics', <class 'orbax.checkpoint._src.handlers.json_checkpoint_handler.JsonSaveArgs'>): <orbax.checkpoint._src.handlers.json_checkpoint_handler.JsonCheckpointHandler object at 0x1455b3a35f10>, ('metrics', <class 'orbax.checkpoint._src.handlers.json_checkpoint_handler.JsonRestoreArgs'>): <orbax.checkpoint._src.handlers.json_checkpoint_handler.JsonCheckpointHandler object at 0x1455b3a35f10>}). (3576516:composite_checkpoint_handler.py:502)
+17:51:50.757 [I] orbax-checkpoint version: 0.11.13                                                (3576516:abstract_checkpointer.py:35)
+17:51:50.757 [I] [process=0][thread=MainThread] Using barrier_sync_fn: <function get_barrier_sync_fn.<locals>.<lambda> at 0x1455b37e87c0> timeout: 7200 secs and primary_host=0 for async checkpoint writes (3576516:async_checkpointer.py:170)
+17:51:50.758 [I] Found 0 checkpoint steps in /cluster/tufts/hrilab/tdugga02/openpi/checkpoints/pi05_forklift/forklift-full (3576516:checkpoint_manager.py:1701)
+17:51:50.759 [I] [process=0][thread=MainThread] CheckpointManager created,  primary_host=0, CheckpointManagerOptions=CheckpointManagerOptions(save_interval_steps=1, max_to_keep=1, keep_time_interval=None, keep_period=5000, should_keep_fn=None, best_fn=None, best_mode='max', keep_checkpoints_without_metrics=True, step_prefix=None, step_format_fixed_length=None, step_name_format=None, create=False, cleanup_tmp_directories=False, save_on_steps=frozenset(), single_host_load_and_broadcast=False, todelete_subdir=None, enable_background_delete=False, read_only=False, enable_async_checkpointing=True, async_options=AsyncOptions(timeout_secs=7200, barrier_sync_fn=None, post_finalization_callback=None, create_directories_asynchronously=True), multiprocessing_options=MultiprocessingOptions(primary_host=0, active_processes=None, barrier_sync_key_prefix=None), should_save_fn=None, file_options=FileOptions(path_permission_mode=None), save_root_metadata=True, temporary_path_class=None, save_decision_policy=None, prevent_write_metrics=False), root_directory=/cluster/tufts/hrilab/tdugga02/openpi/checkpoints/pi05_forklift/forklift-full: <orbax.checkpoint.checkpoint_manager.CheckpointManager object at 0x1455b3c2d350> (3576516:checkpoint_manager.py:801)
+wandb: [wandb.login()] Loaded credentials for https://api.wandb.ai from /cluster/home/tdugga02/.netrc.
+wandb: Currently logged in as: tim-duggan93 (tim-duggan93-tufts-university) to https://api.wandb.ai. Use `wandb login --relogin` to force relogin
+wandb: Tracking run with wandb version 0.26.1
+wandb: Run data is saved locally in /cluster/tufts/hrilab/tdugga02/.cache/wandb/wandb/run-20260429_175151-3qd1hfmy
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run forklift-full
+wandb: ⭐️ View project at https://wandb.ai/tim-duggan93-tufts-university/openpi
+wandb: 🚀 View run at https://wandb.ai/tim-duggan93-tufts-university/openpi/runs/3qd1hfmy
+17:51:52.939 [I] Loaded norm stats from /cluster/tufts/hrilab/tdugga02/openpi/assets/pi05_forklift/tduggan93/forklift (3576516:config.py:197)
+17:51:52.940 [I] data_config: DataConfig(repo_id='tduggan93/forklift', asset_id='tduggan93/forklift', norm_stats={'state': NormStats(mean=array([ 5.43456177e+02,  5.31409485e+02,  3.32369293e+02,  3.85583160e+02,
+        1.26914032e+02,  2.52160896e-02, -7.79013243e-03, -1.43105939e-01,
+       -1.34409711e-01,  8.89798924e-02]), std=array([1.99577675e+01, 1.72816734e+01, 7.09588337e+00, 3.08210114e+02,
+       3.51393700e+01, 1.16415784e-01, 7.37233460e-02, 1.11092854e+00,
+       1.09160101e+00, 2.61424165e-02]), q01=array([ 4.45556209e+02,  4.66472609e+02,  3.06257727e+02,  1.26784600e+02,
+        5.39200000e+01, -3.13186404e-01, -3.79255556e-01, -1.59997969e+00,
+       -1.47068477e+00, -1.26773851e-02]), q99=array([5.78529847e+02, 5.89553900e+02, 3.56613104e+02, 9.92981800e+02,
+       2.14983000e+02, 5.69252127e-01, 2.31140010e-01, 2.56914922e+00,
+       2.55545664e+00, 1.02700398e-01])), 'actions': NormStats(mean=array([0.12367995, 0.12663665, 0.70899075, 0.        , 0.04334077]), std=array([0.26834288, 0.26648298, 1.76599157, 0.        , 0.08192819]), q01=array([ 0.        , -0.58368002,  0.        ,  0.        , -0.021     ]), q99=array([0.79984001, 0.59976002, 7.9984    , 0.        , 0.19495679]))}, repack_transforms=Group(inputs=[RepackTransform(structure={'observation/image': 'image', 'observation/state': 'state', 'actions': 'actions', 'prompt': 'prompt'})], outputs=()), data_transforms=Group(inputs=[ForkliftInputs(model_type=<ModelType.PI05: 'pi05'>)], outputs=[ForkliftOutputs()]), model_transforms=Group(inputs=[InjectDefaultPrompt(prompt=None), ResizeImages(height=224, width=224), TokenizePrompt(tokenizer=<openpi.models.tokenizer.PaligemmaTokenizer object at 0x14559c173b90>, discrete_state_input=False), PadStatesAndActions(model_action_dim=32)], outputs=()), use_quantile_norm=True, action_sequence_keys=('actions',), prompt_from_task=True, rlds_data_dir=None, action_space=None, datasets=()) (3576516:data_loader.py:243)
+17:51:54.063 [I] local_batch_size: 128                                                            (3576516:data_loader.py:324)
+17:52:13.055 [I] Initialized data loader:
+[0].images['base_0_rgb']: (128, 224, 224, 3)@float32
+[0].images['left_wrist_0_rgb']: (128, 224, 224, 3)@float32
+[0].images['right_wrist_0_rgb']: (128, 224, 224, 3)@float32
+[0].image_masks['base_0_rgb']: (128,)@bool
+[0].image_masks['left_wrist_0_rgb']: (128,)@bool
+[0].image_masks['right_wrist_0_rgb']: (128,)@bool
+[0].state: (128, 32)@float32
+[0].tokenized_prompt: (128, 200)@int32
+[0].tokenized_prompt_mask: (128, 200)@bool
+[1]: (128, 10, 32)@float32 (3576516:train.py:227)
+wandb: WARNING Data passed to `wandb.Image` should consist of values in the range [0, 255], image data will be normalized to this range, but behavior will be removed in a future version of wandb.
+17:52:13.875 [I] Downloading gs://openpi-assets/checkpoints/pi05_base/params to /cluster/home/tdugga02/.cache/openpi/openpi-assets/checkpoints/pi05_base/params (3576516:download.py:86)
+17:52:13.877 [W] gsutil not found, falling back to gcsfs. This may fail if GCP credentials are not configured correctly. (3576516:download.py:111)
+17:52:41.695 [I] Progress on: -/12441721931 rate:- remaining:? elapsed:00:00 postfix:-            (3576516:tqdm_logging.py:145)
+17:52:52.353 [I] Progress on: 6.14GiB/11.6GiB rate:628,860,937.3iB/s remaining:00:09 elapsed:00:10 postfix:- (3576516:tqdm_logging.py:145)
+17:53:02.390 [I] Progress on: 10.2GiB/11.6GiB rate:386,565,400.6iB/s remaining:00:03 elapsed:00:20 postfix:- (3576516:tqdm_logging.py:145)
+17:53:03.391 [I] Progress on: 11.6GiB/11.6GiB rate:656,848,231.5iB/s remaining:00:00 elapsed:00:21 postfix:- (3576516:tqdm_logging.py:145)
+17:53:03.422 [I] Created BasePyTreeCheckpointHandler: use_ocdbt=True, use_zarr3=False, pytree_metadata_options=PyTreeMetadataOptions(support_rich_types=False), array_metadata_store=<orbax.checkpoint._src.metadata.array_metadata_store.Store object at 0x1456d8377690> (3576516:base_pytree_checkpoint_handler.py:334)
+17:53:03.512 [I] Restoring checkpoint from /cluster/home/tdugga02/.cache/openpi/openpi-assets/checkpoints/pi05_base/params. (3576516:checkpointer.py:298)
+Traceback (most recent call last):
+  File "/cluster/tufts/hrilab/tdugga02/openpi/scripts/train.py", line 280, in <module>
+    main(_config.cli())
+  File "/cluster/tufts/hrilab/tdugga02/openpi/scripts/train.py", line 236, in main
+    train_state, train_state_sharding = init_train_state(config, init_rng, mesh, resume=resuming)
+                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/cluster/tufts/hrilab/tdugga02/openpi/.venv/lib/python3.11/site-packages/jaxtyping/_decorator.py", line 559, in wrapped_fn
+    return wrapped_fn_impl(args, kwargs, bound, memos)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/cluster/tufts/hrilab/tdugga02/openpi/.venv/lib/python3.11/site-packages/jaxtyping/_decorator.py", line 483, in wrapped_fn_impl
+    out = fn(*args, **kwargs)
+          ^^^^^^^^^^^^^^^^^^^
+  File "/cluster/tufts/hrilab/tdugga02/openpi/scripts/train.py", line 122, in init_train_state
+    partial_params = _load_weights_and_validate(config.weight_loader, train_state_shape.params.to_pure_dict())
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/cluster/tufts/hrilab/tdugga02/openpi/scripts/train.py", line 75, in _load_weights_and_validate
+    loaded_params = loader.load(params_shape)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/cluster/tufts/hrilab/tdugga02/openpi/src/openpi/training/weight_loaders.py", line 52, in load
+    loaded_params = _model.restore_params(download.maybe_download(self.params_path), restore_type=np.ndarray)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/cluster/tufts/hrilab/tdugga02/openpi/src/openpi/models/model.py", line 317, in restore_params
+    params = ckptr.restore(
+             ^^^^^^^^^^^^^^
+  File "/cluster/tufts/hrilab/tdugga02/openpi/.venv/lib/python3.11/site-packages/orbax/checkpoint/_src/checkpointers/checkpointer.py", line 300, in restore
+    restored = self._restore(directory, args=ckpt_args)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/cluster/tufts/hrilab/tdugga02/openpi/.venv/lib/python3.11/site-packages/orbax/checkpoint/_src/checkpointers/checkpointer.py", line 319, in _restore
+    return self._handler.restore(directory, args=args)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/cluster/tufts/hrilab/tdugga02/openpi/.venv/lib/python3.11/site-packages/orbax/checkpoint/_src/handlers/pytree_checkpoint_handler.py", line 796, in restore
+    return self._handler_impl.restore(directory, args=args)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/cluster/tufts/hrilab/tdugga02/openpi/.venv/lib/python3.11/site-packages/orbax/checkpoint/_src/handlers/base_pytree_checkpoint_handler.py", line 760, in restore
+    tree_memory_size, restored_item = asyncio_utils.run_sync(
+                                      ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/cluster/tufts/hrilab/tdugga02/openpi/.venv/lib/python3.11/site-packages/orbax/checkpoint/_src/asyncio_utils.py", line 50, in run_sync
+    return asyncio.run(coro)
+           ^^^^^^^^^^^^^^^^^
+  File "/cluster/home/tdugga02/.local/share/uv/python/cpython-3.11.14-linux-x86_64-gnu/lib/python3.11/asyncio/runners.py", line 190, in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+  File "/cluster/home/tdugga02/.local/share/uv/python/cpython-3.11.14-linux-x86_64-gnu/lib/python3.11/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/cluster/home/tdugga02/.local/share/uv/python/cpython-3.11.14-linux-x86_64-gnu/lib/python3.11/asyncio/base_events.py", line 654, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/cluster/tufts/hrilab/tdugga02/openpi/.venv/lib/python3.11/site-packages/orbax/checkpoint/_src/handlers/base_pytree_checkpoint_handler.py", line 584, in _maybe_deserialize
+    deserialized_batches += await asyncio.gather(*deserialized_batches_ops)
+                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/cluster/tufts/hrilab/tdugga02/openpi/.venv/lib/python3.11/site-packages/orbax/checkpoint/_src/serialization/type_handlers.py", line 690, in deserialize
+    ret = await asyncio.gather(*read_ops)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/cluster/home/tdugga02/.local/share/uv/python/cpython-3.11.14-linux-x86_64-gnu/lib/python3.11/asyncio/tasks.py", line 694, in _wrap_awaitable
+    return (yield from awaitable.__await__())
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ValueError: OUT_OF_RANGE: Error reading "params.PaliGemma.llm.embedder.input_embedding/0.0" in OCDBT database at local file "/cluster/home/tdugga02/.cache/openpi/openpi-assets/checkpoints/pi05_base/params/": Requested byte range [1120149583, 3077149148) is not valid for value of size 2148705709 [source locations='tensorstore/kvstore/batch_util.h:340\ntensorstore/internal/cache/kvs_backed_cache.h:220']
+17:53:04.473 [E] Task exception was never retrieved
+future: <Task finished name='Task-95' coro=<_run_coros_in_chunks.<locals>._run_coro() done, defined at /cluster/tufts/hrilab/tdugga02/openpi/.venv/lib/python3.11/site-packages/fsspec/asyn.py:243> exception=OSError(122, 'Disk quota exceeded')> (3576516:base_events.py:1785)
+Traceback (most recent call last):
+  File "/cluster/tufts/hrilab/tdugga02/openpi/.venv/lib/python3.11/site-packages/gcsfs/core.py", line 1600, in _get_file_request
+    f2.write(data)
+OSError: [Errno 122] Disk quota exceeded
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/cluster/tufts/hrilab/tdugga02/openpi/.venv/lib/python3.11/site-packages/fsspec/asyn.py", line 245, in _run_coro
+    return await asyncio.wait_for(coro, timeout=timeout), i
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/cluster/home/tdugga02/.local/share/uv/python/cpython-3.11.14-linux-x86_64-gnu/lib/python3.11/asyncio/tasks.py", line 452, in wait_for
+    return await fut
+           ^^^^^^^^^
+  File "/cluster/tufts/hrilab/tdugga02/openpi/.venv/lib/python3.11/site-packages/fsspec/callbacks.py", line 81, in func
+    return await fn(path1, path2, callback=child, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/cluster/tufts/hrilab/tdugga02/openpi/.venv/lib/python3.11/site-packages/gcsfs/core.py", line 1613, in _get_file
+    await self._get_file_request(u2, lpath, callback=callback, **kwargs)
+  File "/cluster/tufts/hrilab/tdugga02/openpi/.venv/lib/python3.11/site-packages/decorator.py", line 224, in fun
+    return await caller(func, *(extras + args), **kw)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/cluster/tufts/hrilab/tdugga02/openpi/.venv/lib/python3.11/site-packages/gcsfs/retry.py", line 135, in retry_request
+    return await func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/cluster/tufts/hrilab/tdugga02/openpi/.venv/lib/python3.11/site-packages/gcsfs/core.py", line 1595, in _get_file_request
+    with open(lpath, "wb") as f2:
+OSError: [Errno 122] Disk quota exceeded
+17:53:04.488 [E] Future exception was never retrieved
+future: <Future finished exception=ClientConnectionError('Connection lost: [SSL: APPLICATION_DATA_AFTER_CLOSE_NOTIFY] application data after close notify (_ssl.c:2716)')> (3576516:base_events.py:1785)
+Traceback (most recent call last):
+  File "/cluster/home/tdugga02/.local/share/uv/python/cpython-3.11.14-linux-x86_64-gnu/lib/python3.11/asyncio/sslproto.py", line 648, in _do_shutdown
+    self._sslobj.unwrap()
+  File "/cluster/home/tdugga02/.local/share/uv/python/cpython-3.11.14-linux-x86_64-gnu/lib/python3.11/ssl.py", line 983, in unwrap
+    return self._sslobj.shutdown()
+           ^^^^^^^^^^^^^^^^^^^^^^^
+ssl.SSLError: [SSL: APPLICATION_DATA_AFTER_CLOSE_NOTIFY] application data after close notify (_ssl.c:2716)
+
+The above exception was the direct cause of the following exception:
+
+aiohttp.client_exceptions.ClientConnectionError: Connection lost: [SSL: APPLICATION_DATA_AFTER_CLOSE_NOTIFY] application data after close notify (_ssl.c:2716)
+17:53:04.518 [E] Future exception was never retrieved
+future: <Future finished exception=ClientConnectionError('Connection lost: [SSL: APPLICATION_DATA_AFTER_CLOSE_NOTIFY] application data after close notify (_ssl.c:2716)')> (3576516:base_events.py:1785)
+Traceback (most recent call last):
+  File "/cluster/home/tdugga02/.local/share/uv/python/cpython-3.11.14-linux-x86_64-gnu/lib/python3.11/asyncio/sslproto.py", line 648, in _do_shutdown
+    self._sslobj.unwrap()
+  File "/cluster/home/tdugga02/.local/share/uv/python/cpython-3.11.14-linux-x86_64-gnu/lib/python3.11/ssl.py", line 983, in unwrap
+    return self._sslobj.shutdown()
+           ^^^^^^^^^^^^^^^^^^^^^^^
+ssl.SSLError: [SSL: APPLICATION_DATA_AFTER_CLOSE_NOTIFY] application data after close notify (_ssl.c:2716)
+
+The above exception was the direct cause of the following exception:
+
+aiohttp.client_exceptions.ClientConnectionError: Connection lost: [SSL: APPLICATION_DATA_AFTER_CLOSE_NOTIFY] application data after close notify (_ssl.c:2716)

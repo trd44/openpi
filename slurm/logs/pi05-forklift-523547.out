@@ -1,0 +1,24 @@
+Wed Apr 29 17:51:17 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 575.57.08              Driver Version: 575.57.08      CUDA Version: 12.9     |
+|-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA H200                    On  |   00000000:3B:00.0 Off |                    0 |
+| N/A   38C    P0             83W /  700W |       0MiB / 143771MiB |      0%      Default |
+|                                         |                        |             Disabled |
++-----------------------------------------+------------------------+----------------------+
+                                                                                         
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+JAX devices: [CudaDevice(id=0)]
+[1;34mwandb[0m: 
+[1;34mwandb[0m: 🚀 View run [33mforklift-full[0m at: [34mhttps://wandb.ai/tim-duggan93-tufts-university/openpi/runs/3qd1hfmy[0m
+[1;34mwandb[0m: Find logs at: [1;35m../.cache/wandb/wandb/run-20260429_175151-3qd1hfmy/logs[0m
