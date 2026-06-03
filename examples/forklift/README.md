@@ -10,13 +10,45 @@ dataset and fine-tune `pi05_base` on it.
 >   model on the real robot via the policy server + a ROS 2 client.
 > - **`run_inference_ros2.py`** — the rclpy inference node referenced by
 >   `INFERENCE.md`.
+> - **`eval_on_training_data.py`** — offline evaluator: replays the training
+>   dataset through the policy server and reports where the model
+>   systematically misestimates actions (see "Evaluating the fit" below).
 
 ## Trained checkpoints
 
-| Variant | Hugging Face repo | Train config |
+These are registered by short name in [`forklift_models.py`](forklift_models.py), so
+you can select any of them with `--model <name>` when serving (see "Serving a model"
+and "Evaluating the fit" below). Add a new checkpoint there once and it's selectable
+everywhere.
+
+| Short name | Hugging Face repo | Train config |
 |---|---|---|
-| LoRA finetune | https://huggingface.co/tduggan93/pi05-forklift-lora | `pi05_forklift_lora` |
-| Full finetune | https://huggingface.co/tduggan93/pi05-forklift-full *(may not be up yet)* | `pi05_forklift` |
+| `lora` | https://huggingface.co/tduggan93/pi05-forklift-lora | `pi05_forklift_lora` |
+| `full` | https://huggingface.co/tduggan93/pi05-forklift-full | `pi05_forklift` |
+| `full-10000` | https://huggingface.co/tduggan93/pi05-forklift-full-10000 | `pi05_forklift` |
+| `full-15000` | https://huggingface.co/tduggan93/pi05-forklift-full-15000 | `pi05_forklift` |
+
+## Serving a model
+
+`serve.py` resolves a short name (or a raw HF repo / `gs://` / local checkpoint dir),
+downloads it from Hugging Face if needed, and starts the standard openpi websocket
+policy server. The eval client and the ROS 2 inference node talk to it identically
+regardless of which checkpoint is loaded.
+
+```bash
+uv run examples/forklift/serve.py --model full-15000        # by short name
+uv run examples/forklift/serve.py --model full-10000
+uv run examples/forklift/serve.py --list                    # show the registry
+
+# a local checkpoint you just trained (give it the matching train config)
+uv run examples/forklift/serve.py \
+    --model checkpoints/pi05_forklift_lora/forklift_lora_v1/29999 \
+    --config pi05_forklift_lora
+```
+
+(`scripts/serve_policy.py policy:checkpoint --policy.config=... --policy.dir=...` still
+works for `gs://`/local dirs, but it can't fetch a bare HF repo id — that's exactly
+what `serve.py` adds.)
 
 ## Dataset scope
 
@@ -171,6 +203,73 @@ For a 10-step smoke run before committing to a real run:
 ```bash
 uv run scripts/train.py pi05_forklift_lora --exp-name=smoke --overwrite --num_train_steps=10
 ```
+
+## Evaluating the fit (against the training data)
+
+`eval_on_training_data.py` checks how well a fine-tuned checkpoint reproduces the
+actions in the dataset it was trained on. It uses the **same policy-server +
+websocket-client flow** as real inference (`scripts/serve_policy.py` + a client),
+so what it measures is exactly what the robot would receive — only the "robot"
+is the recorded dataset, replayed open-loop. At each step it feeds the recorded
+observation to the server, gets the 10-step action chunk back, and compares it to
+the recorded actions for those steps.
+
+It reports, per action axis (`drive, steer_rate, lift, shift, tilt`):
+
+- **bias** (mean signed error) — a consistent over/under-command, flagged when it
+  exceeds 0.25σ of that axis;
+- **MAE / RMSE / normalized RMSE** — magnitude of error (nRMSE < ~0.5 means clearly
+  better than just predicting the mean; ~1.0 means no better);
+- **Pearson r / R² / fit slope** — a slope far from 1.0 is a *scale* error (the model
+  systematically under- or over-shoots), flagged separately from bias;
+- **error vs. horizon step** — whether the chunk degrades toward its tail;
+- **per-task** breakdown (which of the four prompts is fit worst);
+- **worst episodes**, both a top-K list and anything beyond `mean + Nσ`, so you can
+  pull those rosbags/videos.
+
+Outputs land in `data/forklift/eval/`: `eval_report.json` (every number),
+`per_episode.csv`, and diagnostic plots (pred-vs-gt scatter, residual histograms,
+per-episode RMSE bar).
+
+### Run it directly
+
+```bash
+# 1. Serve the model you want to evaluate (leave running).
+uv run examples/forklift/serve.py --model full-15000
+
+# 2. In another shell, replay the training data through it.
+uv run examples/forklift/eval_on_training_data.py --repo-id tduggan93/forklift
+```
+
+The run is labelled by the served model automatically (picked up from the server
+metadata), so results land in `data/forklift/eval/full-15000/`. To compare models,
+serve each in turn and re-run the eval — each gets its own subfolder. Pass `--label`
+to override the name.
+
+Useful flags:
+- `--replan-steps 1` — densest (10× slower) evaluation.
+- `--max-episodes N` — quick look.
+- `--prompt-override "..."` — probe prompt sensitivity.
+- `--samples-per-obs N` — **best-of-N multimodality diagnostic.** pi0.5 is stochastic
+  and the expert is multimodal, so single-sample L2-to-the-logged-action is pessimistic.
+  With `N>1` the report adds a per-axis "1-sample vs best-of-N" comparison: a *large*
+  gap means the model can produce the expert action but not on every draw (multimodal,
+  fine); a *small* gap means it genuinely can't fit that axis. Costs N× inference —
+  pair it with `--max-episodes`, e.g. `--samples-per-obs 8 --max-episodes 20`.
+
+### Run it via docker compose (matches the inference container flow)
+
+`compose.yml` brings up the policy server and the evaluator as two containers
+talking over the host network — the same pattern as `examples/libero/compose.yml`:
+
+```bash
+MODEL=full-15000 EVAL_ARGS="--repo-id tduggan93/forklift" \
+docker compose -f examples/forklift/compose.yml up --build
+```
+
+`MODEL` is one of the short names above (default `full-15000`); results land in
+`./data/forklift/eval/<model>/`. Set `HF_TOKEN` in your environment first if the
+checkpoint or dataset is private.
 
 ## Notes / known limits
 

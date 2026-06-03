@@ -1,0 +1,72 @@
+# Offline evaluation of the fine-tuned forklift policy against its training data.
+#
+# Same two-container, websocket-over-localhost flow the openpi library uses for
+# inference everywhere else (cf. examples/libero/compose.yml): one container
+# serves the policy, the other is the "client". Here the client is the offline
+# evaluator instead of a live robot — it replays the recorded LeRobot dataset
+# through the policy and compares predictions to the recorded actions.
+#
+# Run with (pick the model by short name — see examples/forklift/forklift_models.py):
+#
+#   MODEL=full-15000 EVAL_ARGS="--repo-id tduggan93/forklift" \
+#   docker compose -f examples/forklift/compose.yml up --build
+#
+# MODEL is one of: lora | full | full-10000 | full-15000 (default full-15000).
+# Results land in ./data/forklift/eval/<model>/ (eval_report.json, per_episode.csv,
+# plots). Set HF_TOKEN in your environment if the checkpoint or dataset is private.
+services:
+  forklift_eval:
+    image: openpi_server  # reuse the server image: it has the full env incl. lerobot
+    depends_on:
+      - openpi_server
+    build:
+      context: ../..
+      dockerfile: scripts/docker/serve_policy.Dockerfile
+    init: true
+    tty: true
+    network_mode: host
+    volumes:
+      - $PWD:/app
+      - ../../data:/app/data
+      # Share the host LeRobot/HuggingFace cache so the dataset isn't re-downloaded.
+      - ${HF_HOME:-~/.cache/huggingface}:/root/.cache/huggingface
+    environment:
+      - EVAL_ARGS
+      - MODEL=${MODEL:-full-15000}
+      - HF_TOKEN
+      - HF_HOME=/root/.cache/huggingface
+    command: >
+      /bin/bash -c "uv run examples/forklift/eval_on_training_data.py
+      --host 0.0.0.0 --port 8000 --label ${MODEL:-full-15000} $EVAL_ARGS"
+    # The eval client is CPU-only (the GPU work happens in openpi_server), but it
+    # waits for the server to come up before its first inference call succeeds.
+
+  openpi_server:
+    image: openpi_server
+    build:
+      context: ../..
+      dockerfile: scripts/docker/serve_policy.Dockerfile
+    init: true
+    tty: true
+    network_mode: host
+    volumes:
+      - $PWD:/app
+      - ${OPENPI_DATA_HOME:-~/.cache/openpi}:/openpi_assets
+      - ${HF_HOME:-~/.cache/huggingface}:/root/.cache/huggingface
+    environment:
+      - MODEL=${MODEL:-full-15000}
+      - HF_TOKEN
+      - HF_HOME=/root/.cache/huggingface
+      - OPENPI_DATA_HOME=/openpi_assets
+      - IS_DOCKER=true
+    command: >
+      /bin/bash -c "uv run examples/forklift/serve.py --model ${MODEL:-full-15000} --port 8000"
+
+    # Comment out this block if not running on a machine with GPUs.
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]

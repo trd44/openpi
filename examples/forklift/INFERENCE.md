@@ -22,13 +22,18 @@ network as long as the forklift PC can reach it.
 
 ## 0. Available trained checkpoints
 
-| Variant | Hugging Face repo | openpi train config |
+| Short name (`--model`) | Hugging Face repo | openpi train config |
 |---|---|---|
-| LoRA finetune | https://huggingface.co/tduggan93/pi05-forklift-lora | `pi05_forklift_lora` |
-| Full finetune | https://huggingface.co/tduggan93/pi05-forklift-full *(may not be uploaded yet — check the page)* | `pi05_forklift` |
+| `lora` | https://huggingface.co/tduggan93/pi05-forklift-lora | `pi05_forklift_lora` |
+| `full` | https://huggingface.co/tduggan93/pi05-forklift-full | `pi05_forklift` |
+| `full-10000` | https://huggingface.co/tduggan93/pi05-forklift-full-10000 | `pi05_forklift` |
+| `full-15000` | https://huggingface.co/tduggan93/pi05-forklift-full-15000 | `pi05_forklift` |
 
-Either checkpoint is loaded the same way. The LoRA one is smaller and fits on
-~24 GB of VRAM; the full finetune wants more.
+Every checkpoint is loaded the same way — just change `--model`. The LoRA one is
+smaller and fits on ~24 GB of VRAM; the full finetunes want more. The
+`full-10000` / `full-15000` variants are the full finetune captured at 10k and
+15k training steps, useful for comparing checkpoints. The list is defined in
+`forklift_models.py`; run `uv run examples/forklift/serve.py --list` to print it.
 
 ---
 
@@ -49,22 +54,21 @@ uv run huggingface-cli login
 # paste a "Read"-scope token from https://huggingface.co/settings/tokens
 ```
 
-Start the server. Two flavors — pick the one that matches the checkpoint you
-want to run:
+Start the server with `serve.py`, picking the checkpoint by short name. It
+downloads the weights from Hugging Face on first use (cached afterward) and
+starts the websocket policy server:
 
 ```bash
-# LoRA checkpoint
-uv run scripts/serve_policy.py policy:checkpoint \
-    --policy.config=pi05_forklift_lora \
-    --policy.dir=tduggan93/pi05-forklift-lora
-
-# Full finetune checkpoint (if/when it's uploaded)
-uv run scripts/serve_policy.py policy:checkpoint \
-    --policy.config=pi05_forklift \
-    --policy.dir=tduggan93/pi05-forklift-full
+uv run examples/forklift/serve.py --model full-15000     # or: full-10000, full, lora
 ```
 
-You should see a line like `Listening on 0.0.0.0:8000`. Leave it running.
+You should see a line like `Listening on 0.0.0.0:8000`. Leave it running. To run
+a different checkpoint, stop it and re-launch with another `--model` — the
+forklift PC side doesn't change at all.
+
+(Under the hood this is the same server `scripts/serve_policy.py` starts;
+`serve.py` just adds the friendly-name registry and the Hugging Face download,
+which `--policy.dir` alone does not do for bare HF repo ids.)
 
 If the GPU machine is remote, note its IP (e.g. `192.168.1.42`) — the forklift
 PC will need it.
