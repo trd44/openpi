@@ -7,6 +7,8 @@
 #SBATCH --time=2-00:00:00
 #SBATCH --output=/cluster/tufts/hrilab/tdugga02/openpi/slurm/logs/%x-%j.out
 #SBATCH --error=/cluster/tufts/hrilab/tdugga02/openpi/slurm/logs/%x-%j.err
+#SBATCH --mail-type=BEGIN,END,FAIL
+#SBATCH --mail-user=tdugga02@tufts.edu
 
 set -euo pipefail
 
