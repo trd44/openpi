@@ -28,11 +28,12 @@ network as long as the forklift PC can reach it.
 | `full` | https://huggingface.co/tduggan93/pi05-forklift-full | `pi05_forklift` |
 | `full-10000` | https://huggingface.co/tduggan93/pi05-forklift-full-10000 | `pi05_forklift` |
 | `full-15000` | https://huggingface.co/tduggan93/pi05-forklift-full-15000 | `pi05_forklift` |
+| `full-29999` | https://huggingface.co/tduggan93/pi05-forklift-full-29999 | `pi05_forklift` |
 
 Every checkpoint is loaded the same way — just change `--model`. The LoRA one is
 smaller and fits on ~24 GB of VRAM; the full finetunes want more. The
-`full-10000` / `full-15000` variants are the full finetune captured at 10k and
-15k training steps, useful for comparing checkpoints. The list is defined in
+`full-10000` / `full-15000` / `full-29999` variants are the full finetune captured
+at 10k, 15k, and 30k (final) training steps, useful for comparing checkpoints. The list is defined in
 `forklift_models.py`; run `uv run examples/forklift/serve.py --list` to print it.
 
 ---
