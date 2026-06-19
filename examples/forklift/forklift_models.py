@@ -54,6 +54,11 @@ MODELS: dict[str, ModelSpec] = {
         source="tduggan93/pi05-forklift-full-15000",
         note="Full finetune @ 15k steps.",
     ),
+    "full-29999": ModelSpec(
+        config="pi05_forklift",
+        source="tduggan93/pi05-forklift-full-29999",
+        note="Full finetune @ 30k steps (final).",
+    ),
 }
 
 

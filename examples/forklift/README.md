@@ -27,6 +27,7 @@ everywhere.
 | `full` | https://huggingface.co/tduggan93/pi05-forklift-full | `pi05_forklift` |
 | `full-10000` | https://huggingface.co/tduggan93/pi05-forklift-full-10000 | `pi05_forklift` |
 | `full-15000` | https://huggingface.co/tduggan93/pi05-forklift-full-15000 | `pi05_forklift` |
+| `full-29999` | https://huggingface.co/tduggan93/pi05-forklift-full-29999 | `pi05_forklift` |
 
 ## Serving a model
 
