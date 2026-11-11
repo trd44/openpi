@@ -1064,6 +1064,36 @@ _CONFIGS = [
         instruction_override="Stack the 4 blocks from largest to smallest on the gray area.",
         # num_workers=0,
     ),
+    # Restored from 6948cea ("Assembly line sorting config added"); later dropped by
+    # 4138635. Serves tduggan93/pi0-3-color-block-sorting (3-colour sorting, fine-tuned).
+    TrainConfig(
+        name="pi0_assembly_line_sorting_lora",
+        model=pi0.Pi0Config(
+            paligemma_variant="gemma_2b_lora",
+            action_expert_variant="gemma_300m_lora",
+        ),
+        freeze_filter=pi0.Pi0Config(
+            paligemma_variant="gemma_2b_lora",
+            action_expert_variant="gemma_300m_lora",
+        ).get_freeze_filter(),
+        data=LeRobotLiberoDataConfig(
+            repo_id="tduggan93/assembly_line_sorting",
+            base_config=DataConfig(prompt_from_task=True),
+        ),
+        batch_size=16,
+        lr_schedule=_optimizer.CosineDecaySchedule(
+            warmup_steps=10_000,
+            peak_lr=5e-5,
+            decay_steps=1_000_000,
+            decay_lr=5e-5,
+        ),
+        optimizer=_optimizer.AdamW(clip_gradient_norm=1.0),
+        # Turn off EMA for LoRA finetuning.
+        ema_decay=None,
+        weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi0_base/params"),
+        num_train_steps=30_000,
+        instruction_override="Sort the cubes on the assembly line by color.",
+    ),
 ]
 
 if len({config.name for config in _CONFIGS}) != len(_CONFIGS):
